@@ -17,9 +17,47 @@
             vertical-align: middle;   /* centre verticalement */
             font-size: 48px;
         }
+
+        #app {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+            font-family: system-ui, sans-serif;
+        }
+
+        #stats {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stats-box {
+            min-width: 240px;
+            padding: 12px 18px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #f7f7f7;
+        }
+
+        .stats-box h2 { margin: 0 0 10px; font-size: 18px; }
+        .stats-box p  { margin: 6px 0; font-size: 14px; }
+        .stats-box strong { font-size: 16px; }
+        .stats-box code { background: #e6e6e6; padding: 1px 4px; border-radius: 3px; }
     </style>
 </head>
 <body>
-    <div id="game"></div>
+    <div id="app">
+        <div id="game"></div>
+        <div id="stats">
+            <div id="stats-mm" class="stats-box">
+                <h2>Stats IA minimax</h2>
+                <p>Joue un coup pour lancer l'IA…</p>
+            </div>
+            <div id="stats-ab" class="stats-box">
+                <h2>Stats IA minimax α-β</h2>
+                <p>α-β : à implémenter</p>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

@@ -5,8 +5,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function Morpion(container) {
     this.container = container;
+    this.statsMMContainer = document.querySelector('#stats-mm');
+    this.statsABContainer = document.querySelector('#stats-ab');
     this.cells = [['', '', ''],['', '', ''],['', '', '']];
     this.joueur = 'O';
+    this.totalMM = 0;   // cumul des grilles testées — minimax
+    this.totalAB = 0;   // cumul des grilles testées — alpha-bêta
 
     this.attachEvents();
     this.draw();
@@ -66,12 +70,60 @@ Morpion.prototype.attachEvents = function() {
         this.draw();
         if (this.announceIfOver()) return;
 
-        // Tour de l'IA
-        const move = this.bestMove();
-        if (move) this.play(move.x, move.y);
+        // Tour de l'IA : on mesure minimax ET alpha-bêta (si dispo) pour comparer
+        this.statsMM = this.measure('minmax');
+        this.statsAB = this.measure('minmaxAB');   // null tant que minmaxAB n'existe pas
+        if (this.statsMM) this.totalMM += this.statsMM.nodes;
+        if (this.statsAB) this.totalAB += this.statsAB.nodes;
+
+        // On joue le coup trouvé (AB en priorité s'il est dispo, sinon minimax)
+        const result = this.statsAB || this.statsMM;
+        if (result && result.move) this.play(result.move.x, result.move.y);
         this.draw();
+        this.drawStats();
         this.announceIfOver();
     });
+};
+
+// Lance bestMove avec la méthode de score donnée, en comptant les grilles + le temps.
+// Retourne null si la méthode n'existe pas encore (ex : minmaxAB pas codé).
+Morpion.prototype.measure = function(scoreMethod) {
+    if (typeof this[scoreMethod] !== 'function') return null;
+
+    Morpion.nodes = 0;
+    const t0 = performance.now();
+    const move = this.bestMove(scoreMethod);
+
+    return {
+        move,
+        nodes: Morpion.nodes,
+        timeMs: (performance.now() - t0).toFixed(1),
+    };
+};
+
+// Affiche les stats d'exploration du dernier coup de l'IA (les deux algos)
+Morpion.prototype.drawStats = function() {
+    this.renderStatsBox(this.statsMMContainer, 'Stats IA minimax',
+        this.statsMM, this.totalMM, '—');
+    this.renderStatsBox(this.statsABContainer, 'Stats IA minimax α-β',
+        this.statsAB, this.totalAB, 'α-β : à implémenter (<code>minmaxAB</code>)');
+};
+
+Morpion.prototype.renderStatsBox = function(box, titre, stats, total, placeholder) {
+    if (!box) return;
+
+    if (!stats) {
+        box.innerHTML = `<h2>${titre}</h2><p>${placeholder}</p>`;
+        return;
+    }
+
+    const fmt = n => n.toLocaleString('fr-FR');
+    box.innerHTML = `
+        <h2>${titre}</h2>
+        <p>Grilles testées (ce coup) :<br><strong>${fmt(stats.nodes)}</strong></p>
+        <p>Temps de calcul :<br><strong>${stats.timeMs} ms</strong></p>
+        <p>Total cumulé (partie) :<br><strong>${fmt(total)}</strong></p>
+    `;
 };
 
 // Annonce le résultat si la partie est finie, et indique si c'est le cas
@@ -107,8 +159,12 @@ Morpion.prototype.isOver = function() {
     return this.win() !== null || this.isFull();
 }
 
+// Compteur statique : nombre de grilles explorées (partagé par tous les clones)
+Morpion.nodes = 0;
+
 // Retourne le SCORE de la position (un nombre, dans tous les cas)
 Morpion.prototype.minmax = function(depth = 0) {
+    Morpion.nodes++;   // une grille de plus explorée
     const winner = this.win();
     if (winner === 'X')  return 100 - depth;   // X gagne (favorise victoire rapide)
     if (winner === 'O')  return -100 + depth;  // O gagne
@@ -127,8 +183,9 @@ Morpion.prototype.minmax = function(depth = 0) {
     return best;
 }
 
-// Retourne le MEILLEUR COUP { x, y } pour le joueur courant
-Morpion.prototype.bestMove = function() {
+// Retourne le MEILLEUR COUP { x, y } pour le joueur courant.
+// scoreMethod = nom de la fonction d'évaluation à utiliser ('minmax' ou 'minmaxAB').
+Morpion.prototype.bestMove = function(scoreMethod = 'minmax') {
     const maximise = this.joueur === 'X';
     let best = maximise ? -Infinity : Infinity;
     let move = null;
@@ -136,7 +193,7 @@ Morpion.prototype.bestMove = function() {
     for (const { x, y } of this.emptyCells()) {
         const other = this.clone();
         other.play(x, y);
-        const score = other.minmax();
+        const score = other[scoreMethod]();
         if (maximise ? score > best : score < best) {
             best = score;
             move = { x, y };
