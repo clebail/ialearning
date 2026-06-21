@@ -63,10 +63,29 @@ Minimax (fait ✅) :
 - **Réutiliser un seul clone pour tous les coups** = les coups s'accumulent. → un **clone neuf par coup** simulé.
 - **Mélanger score et coup dans un seul retour** (`[score, x, y]`) provoquait `number is not iterable` : les feuilles renvoyaient un nombre, le reste un tableau. → **deux fonctions** (`minmax` = score, `bestMove` = coup).
 
-### Simplifications passées (refacto)
+### Simplifications / refacto
 - Swap joueur lisible : `this.joueur === 'O' ? 'X' : 'O'` (au lieu du calcul via `charCodeAt`)
-- `win()` / `isFull()` compactés via `this.cells.flat()` (indices `0..8`)
 - Helper `emptyCells()` → dédoublonne les boucles de `minmax` et `bestMove` (`for (const {x,y} of ...)`)
 - Gestion de fin de partie unifiée dans `announceIfOver()` (victoire + match nul)
+- **Choix pédagogique** : `win()` / `isFull()` gardés en **2D explicite** (`c[0][0]`, `c[1][2]`…) plutôt que `.flat()` + indices `0..8`. Plus verbeux, mais on *voit* chaque alignement → plus clair pour apprendre. (`.flat()` aplatit un niveau d'imbrication : `[[a,b],[c,d]]` → `[a,b,c,d]`.)
 
-> Prochaine étape : **alpha-bêta** sur ce même code → résultat identique, beaucoup moins de nœuds explorés.
+### Instrumentation — comparer l'exploration (pour préparer l'α-β)
+Objectif : **mesurer le gain de l'élagage**, pas changer le résultat.
+- `Morpion.nodes` : compteur **statique** (partagé par tous les clones), incrémenté à chaque appel de `minmax()` = une grille testée.
+- `measure(scoreMethod)` : remet le compteur à 0, lance `bestMove(scoreMethod)`, chronomètre avec **`performance.now()`** (haute précision, monotone, à utiliser **par différence**) et renvoie `{ move, nodes, timeMs }`. Renvoie `null` si la méthode n'existe pas encore → le bloc α-β s'activera tout seul.
+- `bestMove(scoreMethod)` : générique, prend le **nom** de la fonction de score (`'minmax'` ou `'minmaxAB'`).
+- UI : **une seule grille + deux panneaux de stats** (`#stats-mm`, `#stats-ab`), `drawStats()` / `renderStatsBox()`.
+
+### Décision de conception : pourquoi UNE grille (et pas deux)
+**L'α-β donne EXACTEMENT le même coup que le minimax** (même valeur). Ce n'est pas un meilleur algo de décision, juste le **même** avec un élagage. Donc deux grilles afficheraient la **même partie** → inutile. Ce qui diffère, c'est uniquement le **nombre de grilles explorées** → d'où **deux blocs de stats** côte à côte. (Nuance : en cas d'égalité de score entre plusieurs coups, le coup *retenu* peut différer selon l'ordre de parcours, mais les deux restent optimaux.)
+
+### Rappels de notation (notes d'apprentissage)
+- `100` dans le score = **arbitraire**, mais doit être **> profondeur max (9)** pour que le `- depth` (préférer les victoires rapides) n'inverse jamais l'ordre `victoire > nul > défaite`.
+- `±Infinity` = bornes de départ de `best` : valeur « la pire possible » → garantit que le **premier vrai score** la batte. (`Infinity` n'est pas le plus grand nombre fini — ça, c'est `Number.MAX_VALUE` — mais une valeur spéciale > à tout nombre réel.)
+
+## Prochaine étape : alpha-bêta
+À coder dans `Morpion.prototype.minmaxAB` pour que le 2e panneau s'active automatiquement :
+- **Signature** : `function(depth = 0, alpha = -Infinity, beta = Infinity)` (appelée sans args par `bestMove` → valeurs par défaut indispensables).
+- **Compteur** : mettre `Morpion.nodes++;` en haut, comme dans `minmax`.
+- **Principe** : même structure max/min, mais on **coupe** une branche dès que `alpha >= beta` (l'autre joueur ne la laissera jamais passer).
+- **Vérif** : résultat identique au minimax (IA toujours imbattable), mais nombre de grilles **nettement** plus bas (facteur ~5–10× au 1er coup).

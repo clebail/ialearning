@@ -3,6 +3,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const morpion = new Morpion(container);
 });
 
+// Compteur statique : nombre de grilles explorées (partagé par tous les clones)
+Morpion.nodes = 0;
+
 function Morpion(container) {
     this.container = container;
     this.statsMMContainer = document.querySelector('#stats-mm');
@@ -68,17 +71,26 @@ Morpion.prototype.attachEvents = function() {
 
         this.play(Number(cell.dataset.x), Number(cell.dataset.y));
         this.draw();
-        if (this.announceIfOver()) return;
+        if (this.announceIfOver()) {
+            return;
+        }
 
         // Tour de l'IA : on mesure minimax ET alpha-bêta (si dispo) pour comparer
         this.statsMM = this.measure('minmax');
         this.statsAB = this.measure('minmaxAB');   // null tant que minmaxAB n'existe pas
-        if (this.statsMM) this.totalMM += this.statsMM.nodes;
-        if (this.statsAB) this.totalAB += this.statsAB.nodes;
+        if (this.statsMM) {
+            this.totalMM += this.statsMM.nodes;
+        }
+        if (this.statsAB) {
+            this.totalAB += this.statsAB.nodes;
+        }
 
         // On joue le coup trouvé (AB en priorité s'il est dispo, sinon minimax)
         const result = this.statsAB || this.statsMM;
-        if (result && result.move) this.play(result.move.x, result.move.y);
+        if (result && result.move) {
+            this.play(result.move.x, result.move.y);
+        }
+
         this.draw();
         this.drawStats();
         this.announceIfOver();
@@ -110,7 +122,9 @@ Morpion.prototype.drawStats = function() {
 };
 
 Morpion.prototype.renderStatsBox = function(box, titre, stats, total, placeholder) {
-    if (!box) return;
+    if (!box) {
+        return;
+    }
 
     if (!stats) {
         box.innerHTML = `<h2>${titre}</h2><p>${placeholder}</p>`;
@@ -129,22 +143,36 @@ Morpion.prototype.renderStatsBox = function(box, titre, stats, total, placeholde
 // Annonce le résultat si la partie est finie, et indique si c'est le cas
 Morpion.prototype.announceIfOver = function() {
     const winner = this.win();
-    if (winner) alert(winner + " gagne !");
-    else if (this.isFull()) alert("Match nul !");
+
+    if (winner) {
+        alert(winner + " gagne !");
+    } else if (this.isFull()) {
+        alert("Match nul !");
+    }
+
     return this.isOver();
 }
 
 Morpion.prototype.win = function() {
-    const c = this.cells.flat();   // index 0..8 (lecture ligne par ligne)
+    const c = this.cells;
+
     const lignes = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],   // lignes
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],   // colonnes
-        [0, 4, 8], [2, 4, 6],              // diagonales
+        // lignes horizontales
+        [c[0][0], c[0][1], c[0][2]],
+        [c[1][0], c[1][1], c[1][2]],
+        [c[2][0], c[2][1], c[2][2]],
+        // colonnes
+        [c[0][0], c[1][0], c[2][0]],
+        [c[0][1], c[1][1], c[2][1]],
+        [c[0][2], c[1][2], c[2][2]],
+        // diagonales
+        [c[0][0], c[1][1], c[2][2]],
+        [c[0][2], c[1][1], c[2][0]],
     ];
 
     for (const [a, b, d] of lignes) {
-        if (c[a] !== '' && c[a] === c[b] && c[b] === c[d]) {
-            return c[a]; // 'O' ou 'X'
+        if (a !== '' && a === b && b === d) {
+            return a; // 'O' ou 'X'
         }
     }
 
@@ -152,25 +180,30 @@ Morpion.prototype.win = function() {
 }
 
 Morpion.prototype.isFull = function() {
-    return this.cells.flat().every(c => c !== '');
+    return this.cells.every(ligne => ligne.every(c => c !== ''));
 }
 
 Morpion.prototype.isOver = function() {
     return this.win() !== null || this.isFull();
 }
 
-// Compteur statique : nombre de grilles explorées (partagé par tous les clones)
-Morpion.nodes = 0;
-
 // Retourne le SCORE de la position (un nombre, dans tous les cas)
 Morpion.prototype.minmax = function(depth = 0) {
     Morpion.nodes++;   // une grille de plus explorée
     const winner = this.win();
-    if (winner === 'X')  return 100 - depth;   // X gagne (favorise victoire rapide)
-    if (winner === 'O')  return -100 + depth;  // O gagne
-    if (this.isFull())   return 0;             // match nul
+    if (winner === 'X')  {
+        return 100 - depth;   // 'X' gagne (favorise victoire rapide)
+    }
 
-    const maximise = this.joueur === 'X';      // X maximise, O minimise
+    if (winner === 'O')  {
+        return -100 + depth;  // 'O' gagne
+    }
+
+    if (this.isFull()) {
+        return 0;             // match nul
+    }
+
+    const maximise = this.joueur === 'X';      // 'X' maximise, 'O' minimise
     let best = maximise ? -Infinity : Infinity;
 
     for (const { x, y } of this.emptyCells()) {
