@@ -5,6 +5,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
 Morpion.nodes = 0;
+Morpion.nodesAB = 0;
+Morpion.COMPTEURS = { minmax: 'nodes', minmaxAB: 'nodesAB' };
 
 function Morpion(container) {
     this.container = container;
@@ -102,13 +104,14 @@ Morpion.prototype.attachEvents = function() {
 Morpion.prototype.measure = function(scoreMethod) {
     if (typeof this[scoreMethod] !== 'function') return null;
 
-    Morpion.nodes = 0;
+    const compteur = Morpion.COMPTEURS[scoreMethod];  // 'nodes' ou 'nodesAB'
+    Morpion[compteur] = 0;
     const t0 = performance.now();
     const move = this.bestMove(scoreMethod);
 
     return {
         move,
-        nodes: Morpion.nodes,
+        nodes: Morpion[compteur],
         timeMs: (performance.now() - t0).toFixed(1),
     };
 };
@@ -191,6 +194,7 @@ Morpion.prototype.isOver = function() {
 Morpion.prototype.minmax = function(depth = 0) {
     Morpion.nodes++;   // une grille de plus explorée
     const winner = this.win();
+
     if (winner === 'X')  {
         return 100 - depth;   // 'X' gagne (favorise victoire rapide)
     }
@@ -211,6 +215,46 @@ Morpion.prototype.minmax = function(depth = 0) {
         other.play(x, y);
         const score = other.minmax(depth + 1);
         best = maximise ? Math.max(best, score) : Math.min(best, score);
+    }
+
+    return best;
+}
+
+// Retourne le SCORE de la position (un nombre, dans tous les cas)
+Morpion.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = Infinity) {
+    Morpion.nodesAB++;   // une grille de plus explorée
+    const winner = this.win();
+
+    if (winner === 'X')  {
+        return 100 - depth;   // 'X' gagne (favorise victoire rapide)
+    }
+
+    if (winner === 'O')  {
+        return -100 + depth;  // 'O' gagne
+    }
+
+    if (this.isFull()) {
+        return 0;             // match nul
+    }
+
+    const maximise = this.joueur === 'X';      // 'X' maximise, 'O' minimise
+    let best = maximise ? -Infinity : Infinity;
+
+    for (const { x, y } of this.emptyCells()) {
+        const other = this.clone();
+        other.play(x, y);
+        const score = other.minmaxAB(depth + 1, alpha, beta);
+        if (maximise) {
+            best = Math.max(best, score);
+            alpha = Math.max(alpha, best);
+        } else {
+            best = Math.min(best, score);
+            beta = Math.min(beta, best);
+        }
+
+        if (alpha >= beta) {
+            break;
+        }
     }
 
     return best;
