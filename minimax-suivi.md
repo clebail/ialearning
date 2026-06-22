@@ -38,7 +38,7 @@ Piège classique du morpion en minimax : **l'alternance min/max**. La fonction s
 ## Statut
 - [x] Morpion — minimax nu ✅ *(IA imbattable)*
 - [x] Morpion — alpha-bêta ✅ *(IA imbattable, ~8,9× moins de nœuds)*
-- [ ] Puissance 4 — profondeur + heuristique
+- [x] Puissance 4 — profondeur + heuristique ✅ *(IA jouable et difficile à battre)*
 - [ ] Échecs / dames (plus tard)
 
 ### Avancement détaillé — Morpion
@@ -104,35 +104,50 @@ Deux compteurs statiques : `Morpion.nodes` (minimax) et `Morpion.nodesAB` (α-β
 ### Nuance : pas d'élagage à la racine
 `bestMove` appelle `other[scoreMethod]()` **sans arguments** (pour rester générique entre `minmax` et `minmaxAB`) → chaque coup du 1er étage repart avec `alpha/beta` par défaut. L'élagage ne joue donc **pas entre les coups racines**, seulement *à l'intérieur* de chaque sous-arbre. Gain maximal possible (mais non retenu, pour garder `bestMove` générique) : threader `alpha` dans `bestMove`.
 
-## Puissance 4 (Connect Four) — EN COURS
+## Puissance 4 (Connect Four) — FAIT ✅
 
-Démarré par **copie de `morpion.js`** (renommé `Puissance4`, un seul algo `minmaxAB`). Objectif de l'étape : arbre trop gros pour être exploré entièrement → passage obligé à une **profondeur limitée + fonction d'évaluation heuristique** (alignements de 2/3, contrôle du centre…). Vrai changement d'échelle par rapport au morpion.
+Démarré par **copie de `morpion.js`** (renommé `Puissance4`, un seul algo `minmaxAB`). Objectif de l'étape : arbre trop gros pour être exploré entièrement → passage obligé à une **profondeur limitée + fonction d'évaluation heuristique**. **Résultat : IA jouable et difficile à battre** — c'est le saut conceptuel central du projet (le morpion descendait toujours jusqu'aux feuilles, jamais d'heuristique).
 
-### Fait
-- [x] Plateau **6 lignes × 7 colonnes** : `cells[ligne][colonne]` (6 sous-tableaux de longueur 7). `draw` cohérent : boucle externe = `<tr>` = ligne (`data-x`), interne = `<td>` = colonne (`data-y`).
-- [x] `play` prend un seul argument (une colonne) au lieu de `{x, y}`. IA commentée le temps de valider le jeu à la main.
-- [x] **Axe tranché** : convention `cells[y][x]` avec `x` = colonne (0..6), `y` = ligne (0..5). Gravité = fixer la colonne, descendre la ligne.
-- [x] **`canPlay` corrigé** : boucle `for` au lieu du `forEach` (le `return` sort vraiment de la fonction — piège du morpion), bornes colonne `x < 7`, balayage `for (y = 5; y >= 0; y--)`.
-- [x] **Jouable à la main ✅** : `play` part de `let y = 5` (bas du plateau ; `y = 6` plantait car `cells[6]` n'existe pas), et le clic lit `cell.dataset.y` (la colonne). On clique une colonne → le pion tombe sur la 1ʳᵉ case libre en partant du bas, colonnes pleines bloquées.
+### Plomberie (fait)
+- [x] Plateau **6 lignes × 7 colonnes** : `cells[y][x]`, `y` = ligne (0..5), `x` = colonne (0..6). Gravité = fixer la colonne, descendre la ligne.
+- [x] `play(x)` prend **une colonne** (un nombre) ; part de `let y = 5` (bas du plateau) et remonte à la 1ʳᵉ case libre.
+- [x] `canPlay(x)` : boucle `for` (pas `forEach` — piège du `return` du morpion), bornes `x < 7`.
+- [x] `availableColumns()` remplace `emptyCells()` : liste des **colonnes** jouables (≤ 7), pas des 42 cases → c'est ce qui borne le facteur de branchement.
 
-### À FAIRE — détection de victoire (et le reste de la migration)
-**État : jouable, mais pas de gagnant** — `announceIfOver()` est encore commenté (bloc IA), et `win()` est toujours la logique morpion 3×3. On pose des pions en alternance, personne ne gagne.
+### `win()` réécrit autour de `nbAlignes(j, nb)` — le vrai morceau de plomberie
+`win()` ne teste plus 8 alignements en dur : il appelle `nbAlignes('O', 4)` puis `nbAlignes('X', 4)`.
+- **`nbAlignes(j, nb)`** balaie les 4 directions (→ horizontal, ↑ vertical, ↗, ↖) et cherche `nb` pions identiques de `j` alignés. Bornes **généralisées en fonction de `nb`** : `x <= 7-nb`, `y >= nb-1`, `x >= nb-1` (au lieu des `3`/`4` codés en dur du morpion) → la **même fonction sert pour 4 (victoire) ET 2/3 (heuristique)**.
+- **Détecteur, pas compteur** : `return j` au **premier** alignement trouvé (malgré le nom « nb »). Donc `evaluate` ne sait pas *combien* il y en a — une menace pèse autant que trois. Suffisant pour ce 1er jet.
+- **`nb === 4`** → victoire pleine, on renvoie `j` direct. **`nb < 4`** → on n'accepte l'alignement que s'il a **au moins une extrémité immédiatement libre** (case vide juste avant/après la fenêtre) = un alignement *encore complétable*. (`nbVide` testé en deux temps avant d'être remplacé par ce `nb === 4`.)
 
-Ordre conseillé :
-1. **`win()` — 4 alignés** dans les 4 directions (→, ↓, ↘, ↙), n'importe où sur le 7×6. Les 8 alignements en dur du morpion sautent → balayer le plateau et tester 4 cases depuis chaque case. *(le vrai morceau de plomberie)*
-2. Réactiver `announceIfOver()` → valider les victoires à la main (toi contre toi).
-3. **`availableColumns()`** remplace `emptyCells` : liste des **colonnes** jouables (≤ 7), pas des 42 cases.
-4. Puis seulement : rebrancher l'IA avec **profondeur + heuristique** (voir section dédiée ci-dessous).
-5. Nettoyage : supprimer la `Puissance4.nodesAB` déclarée mais morte (le code lit/écrit `Puissance4.nodes`).
-
-### À FAIRE — migrer la logique morpion → Puissance 4 (encore en 3×3)
-- `win()` : 4 alignés **n'importe où**, dans les 4 directions (→, ↓, ↘, ↙). Les 8 alignements en dur du morpion sautent → balayer le plateau et tester 4 cases depuis chaque case.
-- `emptyCells()` → `availableColumns()` : liste des **colonnes** jouables (≤ 7), pas des 42 cases. C'est ce qui borne le facteur de branchement.
-- Compteur : un seul algo ici → garder `Puissance4.nodes`, **supprimer** la `Puissance4.nodesAB` déclarée (morte : le code lit/écrit `nodes`). Plus besoin de table `COMPTEURS`.
-
-### À FAIRE — LE concept neuf : profondeur limitée + heuristique
-L'arbre est trop gros pour descendre aux feuilles. `minmaxAB` doit **s'arrêter à `MAX_DEPTH`** et, sur une position *non terminale*, renvoyer `this.evaluate()` au lieu d'un score de fin de partie :
-```js
-if (depth >= MAX_DEPTH) return this.evaluate();
+### LE concept neuf : profondeur limitée + heuristique
+`minmaxAB(depth, alpha, beta)` — ordre des tests **important** :
 ```
-`evaluate()` note la position sans la finir : alignements de 2/3 (les siens +, l'adversaire −), bonus colonne centrale, etc. **C'est le vrai morceau de l'étape** — le morpion descendait toujours jusqu'au bout, donc n'a jamais imposé d'heuristique.
+win() → ±10000 ∓ depth   (fins de partie réelles d'abord ; depth = préférer les victoires rapides)
+isFull() → 0
+depth >= MAX_DEPTH → this.evaluate()   (cutoff heuristique APRÈS les terminaux)
+```
+- **`evaluate()`** renvoie un **score signé depuis un point de vue fixe** (X positif, O négatif), pas « le joueur courant » — parce que X maximise / O minimise :
+  ```js
+  if (this.nbAlignes('X', 3)) score += 1000;
+  if (this.nbAlignes('X', 2)) score += 100;
+  if (this.nbAlignes('O', 3)) score -= 1000;
+  if (this.nbAlignes('O', 2)) score -= 100;
+  ```
+- **Échelle** : victoire (10000) doit rester **>> heuristique** pour qu'une vraie victoire domine toujours.
+- **`MAX_DEPTH`** : testé à 10 (très fort mais 1er coup lent), puis **ramené à 5** (bon compromis jouable/réactif). À profondeur faible, c'est **la qualité de `evaluate()` qui compte le plus**.
+
+### Bugs rencontrés (et leçons) — Puissance 4
+- **Sens de boucle inversé dans `win()`** : `for (y=5; y<=0; y--)` (et `y<=3`) → condition fausse d'entrée, la boucle **ne tourne jamais**. Seules les victoires verticales étaient détectées. → `y>=0` / `y>=3`. *(pendant du piège `return`-dans-`forEach` : faire matcher le **sens de la condition** avec le sens de l'itération.)*
+- **Bornes codées en dur pour `nb=4`** dans 3 des 4 directions (`y>=3`, `x<4`…) : faux dès qu'on appelle `nbAlignes` avec `nb=2/3`. → généraliser en `nb-1` / `7-nb`.
+- **Indice d'extrémité droite** : la case juste après une fenêtre `[x .. x+nb-1]` est `x+nb`, pas `x+nb+1`.
+- **Noms `x`/`y` inversés dans `draw`** : la boucle externe (les lignes) était nommée `x`. Marchait par hasard car le handler lisait `data-y`. → renommé `(ligne, y)` / `(valeur, x)`, `data-x` = colonne, et le handler lit `dataset.x`.
+- **`bestMove` plantait** : `for (const y of availableColumns())` puis `other.play(x)` avec `x` jamais déclaré → `ReferenceError`. Et `move = {x, y}` (forme morpion) au lieu de `move = x` (une colonne). 
+- **L'IA « calculait mais ne jouait pas »** : le handler faisait `this.play(result.move.x)` — or `move` est un **nombre** (colonne), donc `.x` = `undefined` → `play(undefined)` ne pose rien. → `this.play(result.move)`.
+- **Colonne 0 falsy** : `if (result && result.move)` ignore le coup quand l'IA choisit la colonne 0 (`0` est *falsy*). → `result.move !== null`.
+
+### Reste optionnel (améliorations, non bloquantes)
+- **Comptage au lieu de détection** dans `evaluate` (+1000 *par* trois-ouvert) → IA meilleure à profondeur égale.
+- **Move ordering** (explorer le centre d'abord) → l'α-β coupe plus → `MAX_DEPTH` plus haut à temps égal. Le compteur `Puissance4.nodes` est déjà là pour mesurer le gain.
+- **Bonus centre** dans `evaluate`.
+- Nettoyage : `Puissance4.nodesAB` (l.7) déclaré mais mort (tout passe par `Puissance4.nodes`).

@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
 Puissance4.nodesAB = 0;
+const MAX_DEPTH = 5;
 
 function Puissance4(container) {
     this.container = container;
@@ -52,21 +53,24 @@ Puissance4.prototype.canPlay = function(x) {
     return false;
 }
 
-// Liste des cases vides sous forme { x, y }
-Puissance4.prototype.emptyCells = function() {
-    const cells = [];
-    this.cells.forEach((ligne, x) =>
-        ligne.forEach((v, y) => { if (v === '') cells.push({ x, y }); })
-    );
-    return cells;
+// Liste des colonnes jouables
+Puissance4.prototype.availableColumns = function() {
+    const columns = [];
+    for (let x=0;x<7;x++) {
+        if( (this.canPlay(x))) {
+            columns.push(x)
+        }
+    }
+
+    return columns;
 }
 
 Puissance4.prototype.draw = function() {
     let body = "<table>";
 
-    this.cells.forEach((ligne, x) => {
+    this.cells.forEach((ligne, y) => {
         body += "<tr>";
-        ligne.forEach((valeur, y) => {
+        ligne.forEach((valeur, x) => {
             body += `<td data-x="${x}" data-y="${y}">${valeur}</td>`;
         });
         body += "</tr>";
@@ -82,9 +86,9 @@ Puissance4.prototype.attachEvents = function() {
         const cell = event.target.closest('td');
         if (!cell) return;   // clic à côté d'une case
 
-        this.play(Number(cell.dataset.y));
+        this.play(Number(cell.dataset.x));
         this.draw();
-        /*if (this.announceIfOver()) {
+        if (this.announceIfOver()) {
             return;
         }
 
@@ -95,13 +99,13 @@ Puissance4.prototype.attachEvents = function() {
         }
 
         const result = this.statsAB;
-        if (result && result.move) {
-            this.play(result.move.x, result.move.y);
+        if (result && result.move !== null) {
+            this.play(result.move);
         }
 
         this.draw();
         this.drawStats();
-        this.announceIfOver();*/
+        this.announceIfOver();
     });
 };
 
@@ -160,25 +164,105 @@ Puissance4.prototype.announceIfOver = function() {
 }
 
 Puissance4.prototype.win = function() {
-    const c = this.cells;
+    if (this.nbAlignes('O', 4)) {
+        return 'O';
+    }
 
-    const lignes = [
-        // lignes horizontales
-        [c[0][0], c[0][1], c[0][2]],
-        [c[1][0], c[1][1], c[1][2]],
-        [c[2][0], c[2][1], c[2][2]],
-        // colonnes
-        [c[0][0], c[1][0], c[2][0]],
-        [c[0][1], c[1][1], c[2][1]],
-        [c[0][2], c[1][2], c[2][2]],
-        // diagonales
-        [c[0][0], c[1][1], c[2][2]],
-        [c[0][2], c[1][1], c[2][0]],
-    ];
+    return this.nbAlignes('X', 4);
+}
 
-    for (const [a, b, d] of lignes) {
-        if (a !== '' && a === b && b === d) {
-            return a; // 'O' ou 'X'
+Puissance4.prototype.nbAlignes = function(j, nb) {
+    let y, x, i;
+
+    // Alignement horizontal (→)
+    for (y=5;y>=0;y--) {
+        for (x=0;x<=7-nb;x++) {
+            if (this.cells[y][x] === j) {
+                let ok = true;
+                for (i = 1; i < nb; i++) {
+                    if (this.cells[y][x] !== this.cells[y][x + i]) {
+                        ok = false;
+                    }
+                }
+                if(ok) {
+                    if (nb === 4) {
+                        return j;
+                    }
+
+                    if ((x > 0 && this.cells[y][x-1] === '') || (x + nb < 7 && this.cells[y][x+nb] === '')) {
+                        return j;
+                    }
+                }
+            }
+        }
+    }
+
+    // Alignement vertical (on lit vers le haut ; en pratique seule l'extrémité haute peut être vide — gravité)
+    for (x=0;x<7;x++) {
+        for (y=5;y>=nb-1;y--) {
+            if (this.cells[y][x] === j) {
+                let ok = true;
+                for (i = 1; i < nb; i++) {
+                    if (this.cells[y][x] !== this.cells[y-i][x]) {
+                        ok = false;
+                    }
+                }
+                if(ok) {
+                    if (nb === 4) {
+                        return j;
+                    }
+
+                    if ((y < 5 && this.cells[y+1][x] === '') || (y - nb >= 0 && this.cells[y-nb][x] === '')) {
+                        return j;
+                    }
+                }
+            }
+        }
+    }
+
+    // Alignement diagonale ↗
+    for (y=5;y>=nb-1;y--) {
+        for (x=0;x<=7-nb;x++) {
+            if (this.cells[y][x] === j) {
+                let ok = true;
+                for (i = 1; i < nb; i++) {
+                    if (this.cells[y][x] !== this.cells[y-i][x+i]) {
+                        ok = false;
+                    }
+                }
+                if(ok) {
+                    if (nb === 4) {
+                        return j;
+                    }
+
+                    if ((y < 5 && x > 0 && this.cells[y+1][x-1] === '') || (y - nb >= 0 && x + nb < 7 && this.cells[y-nb][x+nb] === '')) {
+                        return j;
+                    }
+                }
+            }
+        }
+    }
+
+    // Alignement diagonale ↖
+    for (y=5;y>=nb-1;y--) {
+        for (x=nb-1;x<7;x++) {
+            if (this.cells[y][x] === j) {
+                let ok = true;
+                for (i = 1; i < nb; i++) {
+                    if (this.cells[y][x] !== this.cells[y-i][x-i]) {
+                        ok = false;
+                    }
+                }
+                if(ok) {
+                    if (nb === 4) {
+                        return j;
+                    }
+
+                    if ((y < 5 && x < 6 && this.cells[y+1][x+1] === '') || (y - nb >= 0 && x - nb >= 0 && this.cells[y-nb][x-nb] === '')) {
+                        return j;
+                    }
+                }
+            }
         }
     }
 
@@ -196,26 +280,29 @@ Puissance4.prototype.isOver = function() {
 // Retourne le SCORE de la position (un nombre, dans tous les cas)
 Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = Infinity) {
     Puissance4.nodes++;   // une grille de plus explorée
+
     const winner = this.win();
 
     if (winner === 'X')  {
-        return 100 - depth;   // 'X' gagne (favorise victoire rapide)
+        return 10000 - depth;   // 'X' gagne (favorise victoire rapide)
     }
 
     if (winner === 'O')  {
-        return -100 + depth;  // 'O' gagne
+        return -10000 + depth;  // 'O' gagne
     }
 
     if (this.isFull()) {
         return 0;             // match nul
     }
 
+    if(depth >= MAX_DEPTH) return this.evaluate();
+
     const maximise = this.joueur === 'X';      // 'X' maximise, 'O' minimise
     let best = maximise ? -Infinity : Infinity;
 
-    for (const { x, y } of this.emptyCells()) {
+    for (const x of this.availableColumns()) {
         const other = this.clone();
-        other.play(x, y);
+        other.play(x);
         const score = other.minmaxAB(depth + 1, alpha, beta);
         if (maximise) {
             best = Math.max(best, score);
@@ -234,21 +321,31 @@ Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = In
 }
 
 // Retourne le MEILLEUR COUP { x, y } pour le joueur courant.
-// scoreMethod = nom de la fonction d'évaluation à utiliser ('minmax' ou 'minmaxAB').
-Puissance4.prototype.bestMove = function(scoreMethod = 'minmax') {
+Puissance4.prototype.bestMove = function( ) {
     const maximise = this.joueur === 'X';
     let best = maximise ? -Infinity : Infinity;
     let move = null;
 
-    for (const { x, y } of this.emptyCells()) {
+    for (const x of this.availableColumns()) {
         const other = this.clone();
-        other.play(x, y);
-        const score = other[scoreMethod]();
+        other.play(x);
+        const score = other.minmaxAB();
         if (maximise ? score > best : score < best) {
             best = score;
-            move = { x, y };
+            move = x;
         }
     }
 
     return move;
+}
+
+Puissance4.prototype.evaluate = function( ) {
+    let score = 0;
+
+    if (this.nbAlignes('X', 3)) score += 1000;
+    if (this.nbAlignes('X', 2)) score += 100;
+    if (this.nbAlignes('O', 3)) score -= 1000;
+    if (this.nbAlignes('O', 2)) score -= 100;
+
+    return score;
 }
