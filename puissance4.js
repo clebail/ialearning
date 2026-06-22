@@ -8,8 +8,8 @@ Puissance4.nodesAB = 0;
 
 function Puissance4(container) {
     this.container = container;
-     this.statsABContainer = document.querySelector('#stats-ab');
-    this.cells = [['', '', ''],['', '', ''],['', '', '']];
+    this.statsABContainer = document.querySelector('#stats-ab');
+    this.cells = [['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', '']];
     this.joueur = 'O';
     this.totalAB = 0;   // cumul des grilles testées — alpha-bêta
 
@@ -24,17 +24,32 @@ Puissance4.prototype.clone = function() {
     return copie;                                    // pas de container : simulation pure
 };
 
-Puissance4.prototype.play = function(x, y) {
-    if (!this.canPlay(x, y)) return '';
+Puissance4.prototype.play = function(x) {
+    if (!this.canPlay(x)) return '';
 
     const oldJoueur = this.joueur;
-    this.cells[x][y] = this.joueur;
+    let y = 5;
+    while (this.cells[y][x] !== '') {
+        y--;
+    }
+
+    this.cells[y][x] = this.joueur;
     this.joueur = this.joueur === 'O' ? 'X' : 'O';
     return oldJoueur;
 }
 
-Puissance4.prototype.canPlay = function(x, y) {
-    return x >= 0 && x < 3 && y >= 0 && y < 3 && this.cells[x][y] === '';
+Puissance4.prototype.canPlay = function(x) {
+    let y;
+
+    if (x >= 0 && x < 7) {
+        for (y=5;y>=0;y--) {
+             if (this.cells[y][x] === '') {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 // Liste des cases vides sous forme { x, y }
@@ -67,9 +82,9 @@ Puissance4.prototype.attachEvents = function() {
         const cell = event.target.closest('td');
         if (!cell) return;   // clic à côté d'une case
 
-        this.play(Number(cell.dataset.x), Number(cell.dataset.y));
+        this.play(Number(cell.dataset.y));
         this.draw();
-        if (this.announceIfOver()) {
+        /*if (this.announceIfOver()) {
             return;
         }
 
@@ -86,7 +101,7 @@ Puissance4.prototype.attachEvents = function() {
 
         this.draw();
         this.drawStats();
-        this.announceIfOver();
+        this.announceIfOver();*/
     });
 };
 
