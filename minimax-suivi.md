@@ -146,8 +146,33 @@ depth >= MAX_DEPTH → this.evaluate()   (cutoff heuristique APRÈS les terminau
 - **L'IA « calculait mais ne jouait pas »** : le handler faisait `this.play(result.move.x)` — or `move` est un **nombre** (colonne), donc `.x` = `undefined` → `play(undefined)` ne pose rien. → `this.play(result.move)`.
 - **Colonne 0 falsy** : `if (result && result.move)` ignore le coup quand l'IA choisit la colonne 0 (`0` est *falsy*). → `result.move !== null`.
 
+### Refacto `nbAlignes` → vecteurs `(dx, dy)` — fait ✅
+`nbAlignes` (~95 lignes, **4 blocs copiés-collés** ne différant que par les indices de parcours + le calcul d'extrémité libre) éclatée en **3 fonctions** (~30 lignes) pilotées par une table de directions.
+- **`Puissance4.DIRECTIONS = [[1,0],[0,-1],[1,-1],[-1,-1]]`** (→ ↑ ↗ ↖). Une direction = un vecteur `(dx, dy)`. **Un seul sens par orientation suffit** : la fenêtre démarrant depuis *chaque* case, balayer `→` couvre déjà les lectures droite-à-gauche → 4 vecteurs, pas 8.
+- **`inBounds(x, y)`** : test de bord **centralisé** (`0..6`, `0..5`). Les 3 bugs d'indices listés plus haut (sens de boucle, bornes en dur `nb=4`, `x+nb` vs `x+nb+1`) ne peuvent plus se reproduire par direction.
+- **`aligne(j, nb, x, y, dx, dy)`** : la fenêtre de `nb` cases depuis `(x,y)` est-elle pleine de `j` ? (et si `nb < 4`, bordée d'au moins une extrémité vide → encore complétable). Dernière case = `(x+dx*(nb-1), y+dy*(nb-1))`, vérifiée via `inBounds` avant de lire.
+- **`compteAlignes(j, nb)`** : triple boucle `lignes × colonnes × DIRECTIONS`, incrémente un total. **Vrai compteur** (≠ l'ancien détecteur qui renvoyait au 1er trouvé).
+- **Effets en cascade** : `win()` devient `compteAlignes('O', 4) > 0` ; `evaluate` passe à `1000 * compteAlignes(...)` (au lieu de `if (...) 1000`) → l'IA distingue 1 menace de 3 → **meilleure à profondeur égale**. (Coche la 1ʳᵉ ligne du « Reste optionnel ».)
+- **Leçon** : la duplication par copier-coller *fabrique* des bugs (chaque bloc réintroduit ses propres bornes). Paramétrer la variation (ici le déplacement) par des **données** (`(dx, dy)`) plutôt que par du code dupliqué → un seul endroit à corriger.
+- Vérifié hors DOM (node, `Object.create(prototype)` + `cells` posées à la main) : victoires H/V/diag détectées, `.XXX.` complétable = 1, `OXXXO` bouché = 0.
+- Limites inchangées (acceptables) : alignement **à trou** (`X.XX`) non vu ; fenêtres légèrement chevauchantes dans le comptage.
+
+### Move ordering + threading `alpha` à la racine — fait ✅
+Deux optimisations **qui ne changent pas le résultat** (même coup joué), seulement le nombre de nœuds explorés → permettent de pousser `MAX_DEPTH`.
+
+**Move ordering (centre → bords).** `availableColumns()` renvoie désormais les colonnes triées par une table statique `Puissance4.ORDRE_COLONNES = [3, 2, 4, 1, 5, 0, 6]` (`.filter(x => canPlay(x))`).
+- *Pourquoi le centre d'abord* : la colonne 3 participe au plus grand nombre d'alignements → souvent le meilleur coup. L'explorer en 1er resserre `alpha`/`beta` plus tôt → l'α-β coupe davantage de branches sœurs.
+- *Effet* : gain de l'α-β qui tend vers `b^(d/2)` (ordre parfait) au lieu de `b^d` (mauvais ordre) — la **racine carrée** du nombre de nœuds. Ordre **statique** ≠ parfait → on capture une bonne partie, pas tout (~1-2 plis gagnés).
+- *Propagation gratuite* : `minmaxAB` et `bestMove` itèrent déjà sur `availableColumns()` → une seule ligne change, l'ordre se répand partout.
+
+**Threading `alpha` dans `bestMove`.** Avant, `bestMove` appelait `minmaxAB()` **sans bornes** → chaque sous-arbre racine repartait à `±Infinity` et n'élaguait pas contre les coups racines déjà évalués (la « nuance : pas d'élagage à la racine »).
+- *Fix* : maintenir `alpha`/`beta` dans la boucle racine, appeler `minmaxAB(0, alpha, beta)`, resserrer après chaque coup (`maximise → alpha = max(...)`, sinon `beta = min(...)`).
+- *Subtilité clé* : à la racine, `beta` reste `+Infinity` (pas de parent) → `alpha >= beta` ne se déclenche **jamais entre coups racines**, donc **pas de `break`** ici. Le gain n'est **pas** de couper des coups racines mais de **threader la borne vers le bas** : chaque sous-arbre enfant hérite d'un `alpha` serré et coupe ses branches sous ce seuil.
+- *Combo* : avec le move ordering, le bon coup racine (colonne 3) est exploré en 1er → `alpha` serré dès la 1ʳᵉ itération → les colonnes suivantes héritent d'une borne tendue. C'est ce qui rend `MAX_DEPTH` élevé réellement abordable.
+- **`MAX_DEPTH` poussé à 7** (était 5) une fois ces deux optims en place.
+
 ### Reste optionnel (améliorations, non bloquantes)
-- **Comptage au lieu de détection** dans `evaluate` (+1000 *par* trois-ouvert) → IA meilleure à profondeur égale.
-- **Move ordering** (explorer le centre d'abord) → l'α-β coupe plus → `MAX_DEPTH` plus haut à temps égal. Le compteur `Puissance4.nodes` est déjà là pour mesurer le gain.
-- **Bonus centre** dans `evaluate`.
-- Nettoyage : `Puissance4.nodesAB` (l.7) déclaré mais mort (tout passe par `Puissance4.nodes`).
+- ~~**Comptage au lieu de détection** dans `evaluate`~~ → fait avec le refacto `compteAlignes`.
+- ~~**Move ordering** (explorer le centre d'abord)~~ → fait (`ORDRE_COLONNES`) + threading `alpha` à la racine.
+- **Bonus centre** dans `evaluate` (différent du move ordering : ici on *score* l'occupation du centre, pas l'ordre d'exploration).
+- ~~Nettoyage : `Puissance4.nodesAB` (l.7) déclaré mais mort~~ → supprimé ; la ligne 7 déclare désormais le vrai compteur `Puissance4.nodes`.

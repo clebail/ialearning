@@ -4,8 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
-Puissance4.nodesAB = 0;
-const MAX_DEPTH = 5;
+Puissance4.nodes = 0;
+const MAX_DEPTH = 7;
 
 function Puissance4(container) {
     this.container = container;
@@ -53,16 +53,14 @@ Puissance4.prototype.canPlay = function(x) {
     return false;
 }
 
-// Liste des colonnes jouables
-Puissance4.prototype.availableColumns = function() {
-    const columns = [];
-    for (let x=0;x<7;x++) {
-        if( (this.canPlay(x))) {
-            columns.push(x)
-        }
-    }
+// Ordre d'exploration des colonnes : du centre vers les bords (move ordering).
+// Le centre participe au plus grand nombre d'alignements → souvent le meilleur coup.
+// L'explorer en premier resserre alpha/beta plus tôt → l'α-β coupe davantage.
+Puissance4.ORDRE_COLONNES = [3, 2, 4, 1, 5, 0, 6];
 
-    return columns;
+// Liste des colonnes jouables, déjà triées centre → bords
+Puissance4.prototype.availableColumns = function() {
+    return Puissance4.ORDRE_COLONNES.filter(x => this.canPlay(x));
 }
 
 Puissance4.prototype.draw = function() {
@@ -164,109 +162,47 @@ Puissance4.prototype.announceIfOver = function() {
 }
 
 Puissance4.prototype.win = function() {
-    if (this.nbAlignes('O', 4)) {
-        return 'O';
-    }
-
-    return this.nbAlignes('X', 4);
+    if (this.compteAlignes('O', 4) > 0) return 'O';
+    if (this.compteAlignes('X', 4) > 0) return 'X';
+    return null;
 }
 
-Puissance4.prototype.nbAlignes = function(j, nb) {
-    let y, x, i;
+// Les 4 orientations, comme vecteurs (dx, dy). Un seul sens par orientation
+// suffit à couvrir tout le plateau (la fenêtre balaie chaque case de départ).
+Puissance4.DIRECTIONS = [[1, 0], [0, -1], [1, -1], [-1, -1]]; // →  ↑  ↗  ↖
 
-    // Alignement horizontal (→)
-    for (y=5;y>=0;y--) {
-        for (x=0;x<=7-nb;x++) {
-            if (this.cells[y][x] === j) {
-                let ok = true;
-                for (i = 1; i < nb; i++) {
-                    if (this.cells[y][x] !== this.cells[y][x + i]) {
-                        ok = false;
-                    }
-                }
-                if(ok) {
-                    if (nb === 4) {
-                        return j;
-                    }
+// La case (x,y) est-elle dans le plateau (7 colonnes × 6 lignes) ?
+Puissance4.prototype.inBounds = function(x, y) {
+    return x >= 0 && x < 7 && y >= 0 && y < 6;
+}
 
-                    if ((x > 0 && this.cells[y][x-1] === '') || (x + nb < 7 && this.cells[y][x+nb] === '')) {
-                        return j;
-                    }
-                }
+// La fenêtre de `nb` cases depuis (x,y) dans la direction (dx,dy) est-elle :
+//  - entièrement remplie de `j`,
+//  - et (si nb < 4) bordée d'au moins une case vide à une extrémité (donc encore complétable) ?
+Puissance4.prototype.aligne = function(j, nb, x, y, dx, dy) {
+    const fx = x + dx * (nb - 1), fy = y + dy * (nb - 1); // dernière case de la fenêtre
+    if (!this.inBounds(fx, fy)) return false;
+
+    for (let i = 0; i < nb; i++) {
+        if (this.cells[y + dy * i][x + dx * i] !== j) return false;
+    }
+    if (nb === 4) return true; // alignement gagnant, pas de notion de « complétable »
+
+    const libre = (cx, cy) => this.inBounds(cx, cy) && this.cells[cy][cx] === '';
+    return libre(x - dx, y - dy) || libre(x + dx * nb, y + dy * nb); // extrémité avant OU après
+}
+
+// Compte les alignements de `nb` pions de `j` (encore complétables si nb < 4).
+Puissance4.prototype.compteAlignes = function(j, nb) {
+    let total = 0;
+    for (let y = 0; y < 6; y++) {
+        for (let x = 0; x < 7; x++) {
+            for (const [dx, dy] of Puissance4.DIRECTIONS) {
+                if (this.aligne(j, nb, x, y, dx, dy)) total++;
             }
         }
     }
-
-    // Alignement vertical (on lit vers le haut ; en pratique seule l'extrémité haute peut être vide — gravité)
-    for (x=0;x<7;x++) {
-        for (y=5;y>=nb-1;y--) {
-            if (this.cells[y][x] === j) {
-                let ok = true;
-                for (i = 1; i < nb; i++) {
-                    if (this.cells[y][x] !== this.cells[y-i][x]) {
-                        ok = false;
-                    }
-                }
-                if(ok) {
-                    if (nb === 4) {
-                        return j;
-                    }
-
-                    if ((y < 5 && this.cells[y+1][x] === '') || (y - nb >= 0 && this.cells[y-nb][x] === '')) {
-                        return j;
-                    }
-                }
-            }
-        }
-    }
-
-    // Alignement diagonale ↗
-    for (y=5;y>=nb-1;y--) {
-        for (x=0;x<=7-nb;x++) {
-            if (this.cells[y][x] === j) {
-                let ok = true;
-                for (i = 1; i < nb; i++) {
-                    if (this.cells[y][x] !== this.cells[y-i][x+i]) {
-                        ok = false;
-                    }
-                }
-                if(ok) {
-                    if (nb === 4) {
-                        return j;
-                    }
-
-                    if ((y < 5 && x > 0 && this.cells[y+1][x-1] === '') || (y - nb >= 0 && x + nb < 7 && this.cells[y-nb][x+nb] === '')) {
-                        return j;
-                    }
-                }
-            }
-        }
-    }
-
-    // Alignement diagonale ↖
-    for (y=5;y>=nb-1;y--) {
-        for (x=nb-1;x<7;x++) {
-            if (this.cells[y][x] === j) {
-                let ok = true;
-                for (i = 1; i < nb; i++) {
-                    if (this.cells[y][x] !== this.cells[y-i][x-i]) {
-                        ok = false;
-                    }
-                }
-                if(ok) {
-                    if (nb === 4) {
-                        return j;
-                    }
-
-                    if ((y < 5 && x < 6 && this.cells[y+1][x+1] === '') || (y - nb >= 0 && x - nb >= 0 && this.cells[y-nb][x-nb] === '')) {
-                        return j;
-                    }
-                }
-            }
-        }
-    }
-
-    return null; // pas encore de gagnant
+    return total;
 }
 
 Puissance4.prototype.isFull = function() {
@@ -320,20 +256,24 @@ Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = In
     return best;
 }
 
-// Retourne le MEILLEUR COUP { x, y } pour le joueur courant.
+// Retourne la MEILLEURE COLONNE pour le joueur courant.
 Puissance4.prototype.bestMove = function( ) {
     const maximise = this.joueur === 'X';
     let best = maximise ? -Infinity : Infinity;
     let move = null;
+    let alpha = -Infinity, beta = Infinity;   // bornes threadées vers les sous-arbres
 
     for (const x of this.availableColumns()) {
         const other = this.clone();
         other.play(x);
-        const score = other.minmaxAB();
+        const score = other.minmaxAB(0, alpha, beta);   // le sous-arbre coupe contre alpha
         if (maximise ? score > best : score < best) {
             best = score;
             move = x;
         }
+        // On resserre la borne avec le meilleur score racine trouvé jusqu'ici
+        if (maximise) alpha = Math.max(alpha, best);
+        else beta = Math.min(beta, best);
     }
 
     return move;
@@ -342,10 +282,10 @@ Puissance4.prototype.bestMove = function( ) {
 Puissance4.prototype.evaluate = function( ) {
     let score = 0;
 
-    if (this.nbAlignes('X', 3)) score += 1000;
-    if (this.nbAlignes('X', 2)) score += 100;
-    if (this.nbAlignes('O', 3)) score -= 1000;
-    if (this.nbAlignes('O', 2)) score -= 100;
+    score += 1000 * this.compteAlignes('X', 3);
+    score +=  100 * this.compteAlignes('X', 2);
+    score -= 1000 * this.compteAlignes('O', 3);
+    score -=  100 * this.compteAlignes('O', 2);
 
     return score;
 }
