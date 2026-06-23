@@ -171,6 +171,30 @@ Deux optimisations **qui ne changent pas le résultat** (même coup joué), seul
 - *Combo* : avec le move ordering, le bon coup racine (colonne 3) est exploré en 1er → `alpha` serré dès la 1ʳᵉ itération → les colonnes suivantes héritent d'une borne tendue. C'est ce qui rend `MAX_DEPTH` élevé réellement abordable.
 - **`MAX_DEPTH` poussé à 7** (était 5) une fois ces deux optims en place.
 
+### Fenêtres pré-calculées — sortir la géométrie du point chaud — fait ✅
+Le triple `for` de `compteAlignes` (`lignes × colonnes × DIRECTIONS`) était propre mais **dans le point chaud** : `evaluate` est appelé à chaque feuille de l'arbre et relance `compteAlignes` **4 fois** (X-3, X-2, O-3, O-2) → ce balayage tournait des **millions de fois par coup**. Gêne : on **recalcule une géométrie qui ne change jamais**.
+- **Idée** : la liste de toutes les fenêtres de `nb` cases alignées est **fixe** → la calculer **une seule fois** au chargement, pas à chaque appel.
+- **`construitFenetres(nb)`** (fonction module, exécutée 1×) : refait le triple `for`, mais produit pour chaque fenêtre ses `cases` (liste de `[x,y]`) + ses extrémités `avant`/`apres` (déjà bornées, `null` si hors plateau). `inBounds`/`aligne` supprimées ; `dansPlateau(x,y)` devient une simple fonction (plus besoin d'être une méthode d'instance, elle ne sert qu'au build).
+- **`Puissance4.FENETRES = { 2, 3, 4 }`** : la géométrie figée, indexée par longueur. Comptes : **69** fenêtres de 4 (= le nombre canonique d'alignements au Puissance 4 7×6 → validation), 98 de 3, 131 de 2.
+- **`compteAlignes` devient une boucle PLATE** sur `FENETRES[nb]` : « toutes mes cases sont-elles `j` ? » puis test d'extrémité libre. **Plus aucun calcul d'indice à chaud** (`x+dx*i`…), juste des lectures `this.cells[y][x]`.
+- **Leçon** : le triple `for` n'a pas été *supprimé*, il a **migré dans le setup** (1 exécution au lieu de millions). Quand une boucle laide est sur le chemin critique, la bonne réponse n'est ni de la laisser, ni de la « fonctionnaliser » (`.flatMap().filter()` alloue dans la boucle chaude !) mais de **sortir l'invariant** : ici, la géométrie fixe du plateau.
+- Vérifié hors DOM : résultats **identiques** à la version vecteurs (victoires H/V/diag, `.XXX.` = 1, `OXXXO` = 0).
+
+### Évaluation par CONTENU de fenêtre — corrige le trou + le blocage — fait ✅
+Suite logique des fenêtres pré-calculées : puisqu'on a déjà toutes les fenêtres de 4, autant **classer chaque fenêtre par son contenu** au lieu de chercher des alignements contigus + tester une extrémité libre. **Change le comportement** de l'IA (≠ refacto iso-résultat) — c'est une *meilleure* heuristique, à juger en jouant.
+- **Bascule conceptuelle** : on arrête de chercher « `nb` pions contigus de `j` ». Pour chaque fenêtre de 4, on compte `nbX` / `nbO`, puis :
+  ```js
+  if (nbX && nbO) continue;          // fenêtre MORTE : les deux camps présents
+  if (nbX === 3) score += 1000;      // 3 pions + 1 vide = grosse menace
+  else if (nbX === 2) score += 100;  // amorce
+  // ... idem 'O' en négatif
+  ```
+- **Le trou est géré gratuitement** : `X.XX` = 3 X + 1 vide dans la fenêtre → compté (scoré 1200 au test, **0 avant**). Plus aucune notion de contiguïté.
+- **Le blocage devient EXACT** : `if (nbX && nbO) continue` — une fenêtre contenant un pion adverse ne peut plus être complétée, point. L'ancien test « extrémité libre » n'en était qu'une **approximation**. `OXXXO` → 0 (fenêtres mortes).
+- **Double menace bien pondérée** : `.XXX.` → 2100 (deux fenêtres de 4 contiennent les 3 X) > une simple menace.
+- **Nettoyage en cascade** : `compteAlignes` **supprimée** (win et evaluate font désormais leur propre boucle de fenêtres) ; `construitFenetres` ne prend plus `nb` et **ne stocke plus `avant`/`apres`** ; `FENETRES` redevient un **tableau plat de 69** fenêtres (fini l'indexation par longueur, plus de tables 2/3). `win()` reréécrit en boucle sur `FENETRES` (`cases.every(... === j)`).
+- **Leçon** : une bonne structure de données (les fenêtres) ne fait pas que ranger le code — elle **débloque une meilleure logique** (ici : raisonner sur le *contenu* plutôt que sur la *forme* d'un alignement). La simplification et l'amélioration de l'IA sont venues ensemble.
+
 ### Reste optionnel (améliorations, non bloquantes)
 - ~~**Comptage au lieu de détection** dans `evaluate`~~ → fait avec le refacto `compteAlignes`.
 - ~~**Move ordering** (explorer le centre d'abord)~~ → fait (`ORDRE_COLONNES`) + threading `alpha` à la racine.

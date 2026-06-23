@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
 Puissance4.nodes = 0;
-const MAX_DEPTH = 7;
+const MAX_DEPTH = 6;
 
 function Puissance4(container) {
     this.container = container;
@@ -162,8 +162,11 @@ Puissance4.prototype.announceIfOver = function() {
 }
 
 Puissance4.prototype.win = function() {
-    if (this.compteAlignes('O', 4) > 0) return 'O';
-    if (this.compteAlignes('X', 4) > 0) return 'X';
+    for (const cases of Puissance4.FENETRES) {
+        const [x0, y0] = cases[0];
+        const j = this.cells[y0][x0];
+        if (j !== '' && cases.every(([x, y]) => this.cells[y][x] === j)) return j;
+    }
     return null;
 }
 
@@ -172,38 +175,32 @@ Puissance4.prototype.win = function() {
 Puissance4.DIRECTIONS = [[1, 0], [0, -1], [1, -1], [-1, -1]]; // →  ↑  ↗  ↖
 
 // La case (x,y) est-elle dans le plateau (7 colonnes × 6 lignes) ?
-Puissance4.prototype.inBounds = function(x, y) {
+function dansPlateau(x, y) {
     return x >= 0 && x < 7 && y >= 0 && y < 6;
 }
 
-// La fenêtre de `nb` cases depuis (x,y) dans la direction (dx,dy) est-elle :
-//  - entièrement remplie de `j`,
-//  - et (si nb < 4) bordée d'au moins une case vide à une extrémité (donc encore complétable) ?
-Puissance4.prototype.aligne = function(j, nb, x, y, dx, dy) {
-    const fx = x + dx * (nb - 1), fy = y + dy * (nb - 1); // dernière case de la fenêtre
-    if (!this.inBounds(fx, fy)) return false;
-
-    for (let i = 0; i < nb; i++) {
-        if (this.cells[y + dy * i][x + dx * i] !== j) return false;
-    }
-    if (nb === 4) return true; // alignement gagnant, pas de notion de « complétable »
-
-    const libre = (cx, cy) => this.inBounds(cx, cy) && this.cells[cy][cx] === '';
-    return libre(x - dx, y - dy) || libre(x + dx * nb, y + dy * nb); // extrémité avant OU après
-}
-
-// Compte les alignements de `nb` pions de `j` (encore complétables si nb < 4).
-Puissance4.prototype.compteAlignes = function(j, nb) {
-    let total = 0;
+// Géométrie FIXE du plateau, calculée UNE fois au chargement : les 69 alignements
+// possibles de 4 cases. On ne stocke plus que les 4 cases — le « complétable » se déduit
+// désormais du CONTENU de la fenêtre (voir evaluate), plus besoin d'extrémités avant/après.
+function construitFenetres() {
+    const fenetres = [];
     for (let y = 0; y < 6; y++) {
         for (let x = 0; x < 7; x++) {
             for (const [dx, dy] of Puissance4.DIRECTIONS) {
-                if (this.aligne(j, nb, x, y, dx, dy)) total++;
+                const fx = x + dx * 3, fy = y + dy * 3; // dernière des 4 cases
+                if (!dansPlateau(fx, fy)) continue;
+
+                const cases = [];
+                for (let i = 0; i < 4; i++) cases.push([x + dx * i, y + dy * i]);
+                fenetres.push(cases);
             }
         }
     }
-    return total;
+    return fenetres;
 }
+
+// Les 69 fenêtres de 4 cases alignées, figées.
+Puissance4.FENETRES = construitFenetres();
 
 Puissance4.prototype.isFull = function() {
     return this.cells.every(ligne => ligne.every(c => c !== ''));
@@ -279,13 +276,26 @@ Puissance4.prototype.bestMove = function( ) {
     return move;
 }
 
+// Heuristique : on classe chaque fenêtre de 4 par son CONTENU.
+// Une fenêtre mixte (X et O présents) est morte ; sinon 3 = grosse menace, 2 = amorce.
+// Avantage sur l'ancien test d'extrémité : gère les trous (X.XX) et les blocages exactement.
 Puissance4.prototype.evaluate = function( ) {
     let score = 0;
 
-    score += 1000 * this.compteAlignes('X', 3);
-    score +=  100 * this.compteAlignes('X', 2);
-    score -= 1000 * this.compteAlignes('O', 3);
-    score -=  100 * this.compteAlignes('O', 2);
+    for (const cases of Puissance4.FENETRES) {
+        let nbX = 0, nbO = 0;
+        for (const [x, y] of cases) {
+            const c = this.cells[y][x];
+            if (c === 'X') nbX++;
+            else if (c === 'O') nbO++;
+        }
+        if (nbX && nbO) continue;            // fenêtre morte : les deux camps y sont présents
+
+        if (nbX === 3) score += 1000;
+        else if (nbX === 2) score += 100;
+        else if (nbO === 3) score -= 1000;
+        else if (nbO === 2) score -= 100;
+    }
 
     return score;
 }
