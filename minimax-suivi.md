@@ -18,7 +18,8 @@ Pourquoi c'est le bon choix pour débuter :
 1. **Morpion — minimax nu**, profondeur complète.
 2. **Morpion + élagage alpha-bêta** sur le *même* code → résultat identique, beaucoup moins de nœuds explorés. (Garder les deux concepts bien séparés.)
 3. **Puissance 4 (Connect Four)** → arbre trop gros pour être exploré entièrement → introduction obligatoire d'une **profondeur limitée + fonction d'évaluation heuristique** (alignements de 2/3, contrôle du centre…). Vrai passage à l'échelle.
-4. **Échecs / dames** → version « pour de vrai », gros morceau (génération des coups légaux…), à réserver pour plus tard.
+4. **Awalé (Oware)** → on **réutilise 100 % du moteur** (α-β, profondeur, eval, move ordering) ; le seul code neuf est la **génération + application d'un coup** (semaille + capture), et il est *court* car le choix d'un coup est trivial (≤ 6 trous). Bon barreau avant les échecs : la « génération des coups » qui fait peur y est justement la partie facile.
+5. **Échecs** → version « pour de vrai », gros morceau (génération des coups *légaux* : roque, prise en passant, promotion, filtrage de l'échec…), à réserver pour plus tard.
 
 ## Lancer le projet
 Ne pas ouvrir `morpion.html` en double-clic (`file://` → origine de sécurité isolée, blocages divers). Servir via un serveur HTTP local :
@@ -39,7 +40,8 @@ Piège classique du morpion en minimax : **l'alternance min/max**. La fonction s
 - [x] Morpion — minimax nu ✅ *(IA imbattable)*
 - [x] Morpion — alpha-bêta ✅ *(IA imbattable, ~8,9× moins de nœuds)*
 - [x] Puissance 4 — profondeur + heuristique ✅ *(IA jouable et difficile à battre)*
-- [ ] Échecs / dames (plus tard)
+- [ ] Awalé (Oware) — prochaine étape (réutilise le moteur ; code neuf = semaille + capture)
+- [ ] Échecs (plus tard, gros morceau)
 
 ### Avancement détaillé — Morpion
 Plomberie en place (jeu jouable) :
@@ -210,4 +212,27 @@ Toutes les améliorations listées ont été faites :
 - ~~**Bonus centre** dans `evaluate`~~ → fait (`BONUS_CENTRE`, poids modéré).
 - ~~Nettoyage : `Puissance4.nodesAB` (l.7) déclaré mais mort~~ → supprimé ; la ligne 7 déclare désormais le vrai compteur `Puissance4.nodes`.
 
-**Bilan Puissance 4** : IA jouable et difficile à battre, code d'évaluation propre (fenêtres pré-calculées + contenu), α-β optimisé (move ordering + threading racine). Prochaine étape du projet : échecs / dames.
+**Bilan Puissance 4** : IA jouable et difficile à battre, code d'évaluation propre (fenêtres pré-calculées + contenu), α-β optimisé (move ordering + threading racine). Prochaine étape du projet : **Awalé**.
+
+## Awalé (Oware) — prochaine étape (pas encore commencé)
+
+Choisi **à la place des dames** : on **réutilise tout le moteur** (minimax, α-β, profondeur limitée, `evaluate`, move ordering, threading racine) — le seul code neuf est la mécanique du jeu. Et la « génération des coups légaux » (ce qui fait peur pour les échecs) y est **triviale**.
+
+### Pourquoi c'est un bon cran
+- Jeu **déterministe, parfait, à somme nulle, sans hasard** → terrain idéal de minimax, comme le Puissance 4.
+- **Facteur de branchement ≤ 6** (au plus 6 trous jouables) → arbre encore plus petit que le Puissance 4.
+- `coupsJouables()` = « mes trous non vides ». Pas de géométrie, pas d'échec à filtrer, pas de roque/promotion. **Une ligne.**
+
+### Le vrai travail : `play()` (semaille + capture)
+La difficulté n'est pas dans le *choix* du coup mais dans son *application* :
+1. **Semaille** : prendre les N graines d'un trou, les semer une à une dans les trous suivants (sens antihoraire, en bouclant sur le plateau).
+2. **Capture** : si la **dernière** graine tombe dans un trou **adverse** qui passe à **2 ou 3**, on les rafle ; puis on **remonte** tant que les trous adverses précédents font aussi 2 ou 3.
+3. Deux règles spéciales : **« nourrir l'adversaire »** (s'il n'a plus de graines, on *doit* jouer un coup qui lui en donne) et le **« grand chelem »** (un coup raflant *toutes* ses graines est interdit / non capturant selon la variante).
+
+### Plomberie & éval (esquisse)
+- Plateau : **2 rangées × 6 trous**, 4 graines chacun (48 au total) + **2 greniers** (graines engrangées).
+- Fin de partie : un joueur dépasse **24 graines** (majorité), ou ne peut plus jouer.
+- `evaluate` : différence des **greniers** d'abord, puis raffinements (graines menacées de capture, trous bien chargés…). Esprit identique à l'eval Puissance 4.
+
+### Point de vigilance anticipé
+Comme au Puissance 4 (`bestMove` qui retournait un objet au lieu d'un nombre), bien fixer **ce que représente un coup** : ici un coup = **l'indice d'un trou** (un nombre), pas une structure. Et la **capture remonte en arrière** → attention au sens de boucle (le piège récurrent du projet).
