@@ -276,6 +276,9 @@ Puissance4.prototype.bestMove = function( ) {
     return move;
 }
 
+const COLONNE_CENTRE = 3;   // la colonne du milieu (la plus traversée par les fenêtres)
+const BONUS_CENTRE = 30;    // petit : un départage, pas une priorité (<< menace de 2 = 100)
+
 // Heuristique : on classe chaque fenêtre de 4 par son CONTENU.
 // Une fenêtre mixte (X et O présents) est morte ; sinon 3 = grosse menace, 2 = amorce.
 // Avantage sur l'ancien test d'extrémité : gère les trous (X.XX) et les blocages exactement.
@@ -295,6 +298,14 @@ Puissance4.prototype.evaluate = function( ) {
         else if (nbX === 2) score += 100;
         else if (nbO === 3) score -= 1000;
         else if (nbO === 2) score -= 100;
+    }
+
+    // Bonus centre : un pion au milieu est plus flexible (dans le plus de fenêtres).
+    // Petit poids → ne départage qu'à menaces égales (typiquement en début de partie).
+    for (let y = 0; y < 6; y++) {
+        const c = this.cells[y][COLONNE_CENTRE];
+        if (c === 'X') score += BONUS_CENTRE;
+        else if (c === 'O') score -= BONUS_CENTRE;
     }
 
     return score;
