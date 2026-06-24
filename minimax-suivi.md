@@ -236,3 +236,23 @@ La difficulté n'est pas dans le *choix* du coup mais dans son *application* :
 
 ### Point de vigilance anticipé
 Comme au Puissance 4 (`bestMove` qui retournait un objet au lieu d'un nombre), bien fixer **ce que représente un coup** : ici un coup = **l'indice d'un trou** (un nombre), pas une structure. Et la **capture remonte en arrière** → attention au sens de boucle (le piège récurrent du projet).
+
+### Notes conceptuelles — force d'une IA de jeu (discussion)
+Point de départ (intuition de Corentin) : *« sur les jeux plus gros que le morpion, pour que l'IA soit très forte voire imbattable, tout se passe dans l'heuristique. »* → vrai noyau, mais à nuancer.
+
+- **Noyau juste** : dès que l'arbre est trop gros pour atteindre les feuilles, on s'arrête sur des positions non terminales. La seule chose qui dit si la position est bonne, c'est `evaluate()`. Elle *remplace* le vrai résultat qu'on n'a pas le temps d'aller chercher. Au morpion elle n'existait même pas (on descendait toujours jusqu'au bout).
+- **Mais la force est un PRODUIT**, pas l'heuristique seule :
+  ```
+  force ≈ profondeur atteinte  ×  qualité de l'évaluation
+  ```
+  Les deux se compensent : éval parfaite + profondeur 1 → se fait piéger en 2-3 coups ; éval médiocre + grosse profondeur → joue bien quand même ; **profondeur infinie → l'éval devient inutile** (on retombe sur le minimax pur du morpion = jeu parfait). L'heuristique est une **béquille pour compenser le manque de profondeur** : plus on voit loin, moins elle compte.
+- **Là où rentrent les « optimisations »** (move ordering, tables de transposition, α-β…) : elles **ne changent pas le résultat à profondeur égale**, mais laissent descendre **plus profond dans le même temps** → IA plus forte *sans toucher à l'heuristique*. C'est l'autre moitié du travail (sur les échecs, la plus grosse).
+- **« Imbattable » ≠ heuristique** : une heuristique est une approximation, elle peut se tromper → ne rend jamais imbattable. Imbattable = jeu **résolu** (vu jusqu'au bout, comme le morpion). Anecdote : le **Puissance 4 est un jeu résolu** (le 1er joueur gagne en commençant au centre) — résolu par recherche profonde + tables, *pas* par une super heuristique.
+
+### AlphaZero — le prolongement (intuition de Corentin : « remplacer l'heuristique à la main par un réseau appris »)
+Intuition correcte et non triviale : c'est *littéralement* l'idée centrale. Trois raffinements au-delà du simple « swap `evaluate()` → réseau » :
+1. **Le réseau attaque les DEUX moitiés** de `force = profondeur × éval`. Deux sorties : une **value** (« qui gagne ? » = `evaluate()`) et une **policy** (« quels coups valent le coup d'œil ? » = le **move ordering**).
+2. **Abandon de l'α-β pour MCTS** (Monte-Carlo Tree Search) : recherche *guidée par la policy* (concentre les simulations sur les coups prometteurs) au lieu de bornes alpha/beta. La recherche reste là — pilotée par le réseau.
+3. **D'où viennent les données ? Self-play.** Personne n'étiquette les positions : AlphaZero **joue contre lui-même** et entraîne le réseau sur le résultat de sa propre recherche MCTS (le joueur « avec recherche » est plus fort que le réseau seul → cible d'apprentissage). Boucle qui se tire vers le haut, depuis zéro connaissance humaine.
+
+**Décision** : on reste sur **minimax α-β à la main** pour l'instant. Piste future (après échecs/dames) évoquée : garder l'α-β du Puissance 4 mais remplacer `evaluate()` bricolé par une petite éval **apprise** — pour goûter à l'idée sans tout le MCTS/self-play.
