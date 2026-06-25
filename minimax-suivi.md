@@ -305,4 +305,13 @@ Projet Qt Widgets sous `cpp/puissance4/` (Qt Creator). Étape 1 du plan vidéo.
 - **Look Puissance 4** : fond gris-bleu **pastel** (`176,182,191`), cases vides = ronds blanc cassé (`245,245,245`), O = rouge pastel (`240,138,138`), X = bleu pastel (`130,170,230`). `Antialiasing` + `setPen(Qt::NoPen)`.
 - `setBoard(Puissance4*)` stocke le pointeur et `repaint()`.
 
-**Prochaines étapes C++** : portage du moteur (minmaxAB + heuristique fenêtres), interaction clic → `play(col)`, puis branchement gamesolver.org.
+**Icône (fait ✅).** `icon.svg` (pastel) → `icon.png` en ressource `.qrc` (`windowIcon`) ; sur macOS le Dock exige le bundle → `icon.icns` via `macx: ICON =` (Info.plist). `win32: RC_ICONS` prévu.
+
+**Génération de coups (fait ✅), optims dès l'écriture :**
+- `canPlay(col)` **`O(1)`** : gravité ⇒ jouable ssi case du **haut** vide. Garde `col` obligatoire (`getCell` renvoie 0 hors plateau).
+- `availableColumns` : renvoie le **nombre** de colonnes jouables ; **move ordering centre→bords** `COLUMNS_ORDER = {3,2,4,1,5,0,6}` (`static const int[]`).
+- `play(col)` : pose sur la 1ʳᵉ case libre **depuis le bas**, swap `player = 3 - player`. **Bug corrigé** : 1ʳᵉ version scannait du haut (`getCell(col, row--)`) → boucle morte → tout pion en `row 4`.
+
+**Optim suivante (avec le moteur) : cache `height[NB_COL]`** → `play`/`canPlay` `O(1)` et surtout prépare `undo()` (make/undo sans cloner le plateau, ≫ `structuredClone` JS). À ajouter avec `minmaxAB`, pas avant.
+
+**Prochaines étapes C++** : `win()`/`evaluate` (fenêtres), `minmaxAB` + `height[]`/`undo`, clic → `play(col)`, puis gamesolver.org.
