@@ -43,9 +43,23 @@
         .stats-box p  { margin: 6px 0; font-size: 14px; }
         .stats-box strong { font-size: 16px; }
         .stats-box code { background: #e6e6e6; padding: 1px 4px; border-radius: 3px; }
+
+        #controls {
+            font-family: system-ui, sans-serif;
+            margin: 0 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        #controls label { cursor: pointer; }
     </style>
 </head>
 <body>
+    <div id="controls">
+        <strong>Qui commence ?</strong>
+        <label><input type="radio" name="starter" value="human" checked> Moi</label>
+        <label><input type="radio" name="starter" value="ia"> L'IA</label>
+    </div>
     <div id="app">
         <div id="game"></div>
         <div id="stats">

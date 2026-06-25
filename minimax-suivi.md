@@ -214,6 +214,12 @@ Toutes les améliorations listées ont été faites :
 
 **Bilan Puissance 4** : IA jouable et difficile à battre, code d'évaluation propre (fenêtres pré-calculées + contenu), α-β optimisé (move ordering + threading racine). Prochaine étape du projet : **Awalé**.
 
+### Choix « qui commence » (2 radios) — fait ✅
+Deux radios au-dessus de la grille (« Moi » / « L'IA »). À chaque changement, **partie neuve**. Si l'IA commence, son 1er coup est **forcé au centre** (colonne 3) — pas de minimax pour l'ouverture (le Puissance 4 est résolu : 1er joueur gagnant au centre).
+- **Réutiliser l'instance via `reset(iaCommence)`**, pas un `new Puissance4` par changement : le listener de clic est posé sur `#game` en **délégation** → recréer l'objet **empilerait** un listener par partie (chaque clic déclencherait N handlers). Donc : `attachEvents()` **une seule fois** dans le constructeur, qui délègue ensuite l'init d'état à `reset(false)`.
+- `reset` : vide `cells`, `joueur = 'O'` (l'humain), compteurs à 0, `statsAB = null`, redessine. Si `iaCommence` : `joueur = 'X'` puis `play(COLONNE_CENTRE)` (qui rebascule `joueur` vers `'O'` → à l'humain de jouer).
+- **Leçon** : avec la délégation d'événements, le handler vit sur le **conteneur** (qui survit aux redraws), pas sur les cases. Donc on **ne réattache jamais** ; on ne fait que réinitialiser l'état. `location.reload()` était exclu : il remettrait les radios à leur défaut, perdant le choix « IA commence ».
+
 ## Awalé (Oware) — prochaine étape (pas encore commencé)
 
 Choisi **à la place des dames** : on **réutilise tout le moteur** (minimax, α-β, profondeur limitée, `evaluate`, move ordering, threading racine) — le seul code neuf est la mécanique du jeu. Et la « génération des coups légaux » (ce qui fait peur pour les échecs) y est **triviale**.

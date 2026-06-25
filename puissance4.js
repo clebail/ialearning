@@ -1,6 +1,16 @@
 document.addEventListener("DOMContentLoaded", () => {
     const container = document.querySelector('#game')
     const puissance4 = new Puissance4(container);
+
+    // Radios « qui commence » : à chaque changement, on relance une partie neuve.
+    // On réutilise la MÊME instance (reset) plutôt que d'en créer une nouvelle, sinon
+    // les listeners de clic posés sur #game s'accumuleraient (un par partie).
+    document.querySelectorAll('input[name="starter"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            const iaCommence = document.querySelector('input[name="starter"]:checked').value === 'ia';
+            puissance4.reset(iaCommence);
+        });
+    });
 });
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
@@ -10,12 +20,27 @@ const MAX_DEPTH = 6;
 function Puissance4(container) {
     this.container = container;
     this.statsABContainer = document.querySelector('#stats-ab');
-    this.cells = [['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', '']];
-    this.joueur = 'O';
-    this.totalAB = 0;   // cumul des grilles testées — alpha-bêta
 
-    this.attachEvents();
+    this.attachEvents();   // une seule fois : le listener survit aux reset()
+    this.reset(false);     // partie neuve, l'humain ('O') commence
+}
+
+// Relance une partie neuve. iaCommence = true → l'IA ('X') joue d'office le centre.
+Puissance4.prototype.reset = function(iaCommence) {
+    this.cells = [['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', '']];
+    this.joueur = 'O';    // l'humain est 'O'
+    this.totalAB = 0;     // cumul des grilles testées — alpha-bêta
+    this.statsAB = null;  // pas encore de coup IA mesuré
+
+    // Puissance 4 est un jeu résolu : le 1er joueur gagne en démarrant au centre.
+    // Si l'IA commence, on lui fait jouer le centre d'office — pas besoin de minimax.
+    if (iaCommence) {
+        this.joueur = 'X';
+        this.play(COLONNE_CENTRE);
+    }
+
     this.draw();
+    this.drawStats();
 }
 
 Puissance4.prototype.clone = function() {
