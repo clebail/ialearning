@@ -14,6 +14,7 @@ public:
     int availableColumns(int *a) const;
     unsigned char play(int col);
     unsigned char getCell(int col, int row) const;
+    bool win() const;
 private:
     static const int COLUMNS_ORDER[NB_COL];
 
