@@ -23,6 +23,14 @@ FORMS += \
     mainwindow.ui \
     wpuissance4.ui
 
+RESOURCES += \
+    resources.qrc
+
+# Icône du bundle macOS (Dock / Finder) — réglée via Info.plist par qmake.
+macx: ICON = icon.icns
+# Icône de l'exécutable Windows.
+win32: RC_ICONS = icon.ico
+
 TRANSLATIONS += \
     puissance4_fr_FR.ts
 CONFIG += lrelease

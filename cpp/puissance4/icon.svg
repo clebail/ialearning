@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icône Puissance 4 — palette pastel cohérente avec le plateau (wpuissance4.cpp) -->
+  <rect x="16" y="16" width="224" height="224" rx="32" ry="32" fill="#B0B6BF"/>
+  <g>
+    <!-- ligne du haut -->
+    <circle cx="68"  cy="68"  r="28" fill="#F5F5F5"/>
+    <circle cx="128" cy="68"  r="28" fill="#F5F5F5"/>
+    <circle cx="188" cy="68"  r="28" fill="#82AAE6"/>
+    <!-- ligne du milieu -->
+    <circle cx="68"  cy="128" r="28" fill="#F5F5F5"/>
+    <circle cx="128" cy="128" r="28" fill="#F08A8A"/>
+    <circle cx="188" cy="128" r="28" fill="#82AAE6"/>
+    <!-- ligne du bas -->
+    <circle cx="68"  cy="188" r="28" fill="#F08A8A"/>
+    <circle cx="128" cy="188" r="28" fill="#82AAE6"/>
+    <circle cx="188" cy="188" r="28" fill="#F08A8A"/>
+  </g>
+</svg>

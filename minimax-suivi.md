@@ -292,3 +292,17 @@ GET https://connect4.gamesolver.org/solve?pos=<séquence>
 ### Plan retenu
 1. **Réécrire le moteur d'IA en C++** pour de meilleures perfs (descendre plus profond dans le même temps → IA plus forte sans toucher à l'heuristique, cf. la note « optimisations »).
 2. **Brancher au site dans un second temps** (via l'API gamesolver.org, appelée hors navigateur) pour produire l'analyse coup-par-coup de la vidéo.
+
+### Portage C++ (Qt) — en cours
+Projet Qt Widgets sous `cpp/puissance4/` (Qt Creator). Étape 1 du plan vidéo.
+
+**État du plateau — bitboard (fait ✅).** La classe `Puissance4` stocke la grille dans **6 `unsigned short`** (`board[NB_ROW]`), **2 bits par case** (`CELL_BIT_COUNT`) : `0` = vide, `1` = O, `2` = X. Accès via `getCell(col, row)` / `setCell(col, row, value)` avec décalage `CELL_BIT_COUNT * (NB_COL - col - 1)` et masque `0x3`. Lecture/écriture validées.
+- *Note* : `setCell` fait `board[row] &= ~newValue` avant le `|=` — efface seulement les bits **posés** par la nouvelle valeur, pas les 2 bits de la case (OK pour écrire sur une case vide ; à revoir si on veut écraser une case déjà occupée).
+
+**Affichage — `WPuissance4::paintEvent` (fait ✅).** Widget custom (`wpuissance4.cpp`) qui peint le plateau au `QPainter` :
+- **Ronds, jamais d'ovales** : `cell = qMin(width()/NB_COL, height()/NB_ROW)` → cases carrées, disques aussi gros que possible, grille **centrée** (`offsetX`/`offsetY`).
+- **Gravité respectée** : `row 0` = bas du plateau → dessiné en bas via `(NB_ROW - 1 - row)`.
+- **Look Puissance 4** : fond gris-bleu **pastel** (`176,182,191`), cases vides = ronds blanc cassé (`245,245,245`), O = rouge pastel (`240,138,138`), X = bleu pastel (`130,170,230`). `Antialiasing` + `setPen(Qt::NoPen)`.
+- `setBoard(Puissance4*)` stocke le pointeur et `repaint()`.
+
+**Prochaines étapes C++** : portage du moteur (minmaxAB + heuristique fenêtres), interaction clic → `play(col)`, puis branchement gamesolver.org.
