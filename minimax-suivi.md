@@ -262,3 +262,33 @@ Intuition correcte et non triviale : c'est *littéralement* l'idée centrale. Tr
 3. **D'où viennent les données ? Self-play.** Personne n'étiquette les positions : AlphaZero **joue contre lui-même** et entraîne le réseau sur le résultat de sa propre recherche MCTS (le joueur « avec recherche » est plus fort que le réseau seul → cible d'apprentissage). Boucle qui se tire vers le haut, depuis zéro connaissance humaine.
 
 **Décision** : on reste sur **minimax α-β à la main** pour l'instant. Piste future (après échecs/dames) évoquée : garder l'α-β du Puissance 4 mais remplacer `evaluate()` bricolé par une petite éval **apprise** — pour goûter à l'idée sans tout le MCTS/self-play.
+
+## Projet vidéo — confronter mon IA Puissance 4 à une IA réputée
+
+Idée : prendre un site réputé pour son IA Puissance 4 et l'opposer à la mienne.
+
+### La prémisse « ça finira toujours nul » est fausse
+Le Puissance 4 est un **jeu résolu**, mais pas vers le nul : **avec jeu parfait, le 1er joueur gagne** (en démarrant au centre). L'issue est donc déterminée par **qui commence**, pas par un nul. Et surtout, **mon IA n'est pas parfaite** (α-β profondeur 7 + heuristique = approximation) → face à un adversaire parfait, l'écart se verra. Donc il y a un vrai intérêt : c'est la **démonstration empirique** de la note « force = profondeur × éval » et « imbattable = jeu résolu, pas heuristique ».
+
+### Ce que la confrontation révèle (2 scénarios)
+- **Mon IA commence** (centre forcé) → position théoriquement gagnante : sait-elle *convertir* la victoire face à une défense parfaite ? (probable qu'elle lâche le gain → nul/défaite). **Le vrai test.**
+- **Le solveur commence** → il gagne (parfait) ; mon IA part d'une position perdue → question : à quel coup elle craque, tient-elle longtemps ?
+
+Contenu fort : à **chaque coup de mon IA**, comparer sa colonne au score optimal du solveur → on voit l'instant précis où l'heuristique se trompe (et chiffrer « combien de coups optimaux avant la 1re erreur »).
+
+### Adversaire retenu : le solveur de Pascal Pons (l'oracle parfait)
+**<https://connect4.gamesolver.org>** — LA référence (Puissance 4 résolu depuis 1988). Affiche le **score de chaque colonne** → idéal pour l'analyse coup-par-coup. Alternatives à difficulté réglable (match plus disputé, plus spectaculaire) : **play4row.com/connect-4-ai** (niveaux ; max = parfait via base du jeu résolu), **jsreact.com/connect4** (Random→Master). Mise en scène : segment 1 = vs solveur parfait (démo pédago), segment 2 = vs play4row niveau moyen (spectacle).
+
+### L'API gamesolver.org (non documentée mais publique, testée ✅)
+```
+GET https://connect4.gamesolver.org/solve?pos=<séquence>
+```
+- **`pos`** = suite des colonnes jouées, **1-indexées** (gauche `1` … droite `7`), dans l'ordre des coups. Ex. `44` = les deux au centre.
+- **Réponse** : `{"pos":"44","score":[-3,-3,-2,1,-2,-3,-3]}` — un score **par colonne** (1→7), **du point de vue du joueur au trait**. **signe** = issue (`>0` gagnant, `0` nul, `<0` perdant) ; **magnitude** = vitesse (plus grand = victoire plus rapide / défaite plus lointaine) ; colonne pleine/illégale ≈ valeur sentinelle `100`.
+- Validé : sur `44`, meilleure colonne = la **4** (`+1`) → confirme « centre = coup gagnant du 1er joueur ».
+- **Piège CORS** : un `fetch` direct depuis la page navigateur (localhost) sera probablement **bloqué** (c'est leur backend, pas une API ouverte). → appeler **côté serveur** (script Node) ou via un **petit proxy local**. Rester poli : 1 appel/coup, pas de boucle agressive (service gratuit, non documenté → peut casser).
+- Pas d'API publique pour play4row / jsreact (scraping fragile, ou jeu à la main).
+
+### Plan retenu
+1. **Réécrire le moteur d'IA en C++** pour de meilleures perfs (descendre plus profond dans le même temps → IA plus forte sans toucher à l'heuristique, cf. la note « optimisations »).
+2. **Brancher au site dans un second temps** (via l'API gamesolver.org, appelée hors navigateur) pour produire l'analyse coup-par-coup de la vidéo.
