@@ -278,7 +278,12 @@ Intuition correcte et non triviale : c'est *littéralement* l'idée centrale. Tr
 
 **Décision** : on reste sur **minimax α-β à la main** pour l'instant. Piste future (après échecs/dames) évoquée : garder l'α-β du Puissance 4 mais remplacer `evaluate()` bricolé par une petite éval **apprise** — pour goûter à l'idée sans tout le MCTS/self-play.
 
-## Projet vidéo — confronter mon IA Puissance 4 à une IA réputée
+## Projet vidéo
+
+> **Plan de la vidéo « du JS au C++ »** (synopsis 1 motivations · 2 JS · 3 C++ · 4 verdict) :
+> document dédié [`plan-video.md`](plan-video.md), étoffé au fur et à mesure.
+
+### Confronter mon IA Puissance 4 à une IA réputée
 
 Idée : prendre un site réputé pour son IA Puissance 4 et l'opposer à la mienne.
 
