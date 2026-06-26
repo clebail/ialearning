@@ -56,8 +56,8 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
 
     if (board->win()) {
         gameOver = true;
-        QMessageBox::information(this, "Puissance 4",
-            QStringLiteral("Le joueur %1 gagne !").arg(who));
+        QMessageBox::information(this, "Fin de partie",
+            QStringLiteral("Le joueur %1 gagne !").arg(int(who)));
         return;
     }
 
@@ -65,7 +65,7 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     int colonnes[NB_COL];
     if (board->availableColumns(colonnes) == 0) {
         gameOver = true;
-        QMessageBox::information(this, "Puissance 4", QStringLiteral("Match nul !"));
+        QMessageBox::information(this, "Fin de partie", QStringLiteral("Match nul !"));
     }
 }
 
