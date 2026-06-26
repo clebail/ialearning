@@ -13,5 +13,9 @@ public:
     ~MainWindow();
 private:
     Puissance4 p4;
+
+    // Cumuls sur la partie en cours (remis à zéro à chaque nouvelle partie).
+    long totalNodes = 0;
+    double totalTime = 0.0;
 };
 #endif // MAINWINDOW_H

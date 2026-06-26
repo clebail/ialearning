@@ -5,6 +5,8 @@
 
 const int Puissance4::COLUMNS_ORDER[NB_COL] = {3, 2, 4, 1, 5, 0, 6};
 
+long Puissance4::nodes = 0;
+
 namespace {
 
 // Une case du plateau (sert aussi de vecteur direction : delta colonne / ligne).
@@ -58,6 +60,31 @@ constexpr std::array<Fenetre, NB_FENETRE> construitFenetres() {
 // La table figée, calculée à la compilation.
 constexpr std::array<Fenetre, NB_FENETRE> FENETRES = construitFenetres();
 
+// Une case appartient à au plus 13 fenêtres (les 2 cases centrales du plateau).
+constexpr int MAX_FEN_PAR_CASE = 13;
+
+// Pour une case donnée : les indices (dans FENETRES) des fenêtres qui la contiennent.
+struct CaseFenetres { int nb; int idx[MAX_FEN_PAR_CASE]; };
+
+// Index inverse FENETRES, figé au build lui aussi : à partir d'une case, retrouver
+// directement ses fenêtres. C'est ce qui rend win(col,row) O(13) au lieu de O(69).
+// Si une case dépassait MAX_FEN_PAR_CASE, l'écriture idx[nb++] sortirait du tableau
+// → erreur de compilation (constexpr). La table est donc auto-vérifiée, comme FENETRES.
+constexpr std::array<CaseFenetres, BOARD_SIZE> construitFenetresParCase() {
+    std::array<CaseFenetres, BOARD_SIZE> parCase{};  // nb initialisé à 0 partout
+
+    for (int n = 0; n < NB_FENETRE; n++) {
+        for (const Cell &c : FENETRES[n].cases) {
+            CaseFenetres &cf = parCase[c.col * NB_ROW + c.row];
+            cf.idx[cf.nb++] = n;
+        }
+    }
+
+    return parCase;
+}
+
+constexpr std::array<CaseFenetres, BOARD_SIZE> FENETRES_PAR_CASE = construitFenetresParCase();
+
 }  // namespace
 
 Puissance4::Puissance4() {
@@ -107,12 +134,13 @@ int Puissance4::availableColumns(int *a) const {
     return nb;
 }
 
-unsigned char Puissance4::play(int col) {
+unsigned char Puissance4::play(int col, int *rowOut) {
     if (!canPlay(col)) return 0;
 
     int row = 0;
     while (getCell(col, row) != 0) row++;
     setCell(col, row, player);
+    if (rowOut) *rowOut = row;
 
     unsigned char oldPlayer = player;
     player = PLAYERS - player;
@@ -134,6 +162,26 @@ unsigned char Puissance4::win() const {
     return 0;
 }
 
+// Variante incrémentale appelée par le minimax : on sait qu'un seul jeton vient
+// d'être posé en (lastCol, lastRow), donc seules les fenêtres passant par cette case
+// peuvent former un nouvel alignement. ≤ 13 fenêtres testées au lieu de 69.
+unsigned char Puissance4::win(int lastCol, int lastRow) const {
+    unsigned char j = getCell(lastCol, lastRow);
+    if (j == 0) return 0;  // case vide -> aucun alignement possible ici
+
+    const CaseFenetres &cf = FENETRES_PAR_CASE[lastCol * NB_ROW + lastRow];
+    for (int k = 0; k < cf.nb; k++) {
+        const Fenetre &f = FENETRES[cf.idx[k]];
+        if (j == getCell(f.cases[0].col, f.cases[0].row)
+         && j == getCell(f.cases[1].col, f.cases[1].row)
+         && j == getCell(f.cases[2].col, f.cases[2].row)
+         && j == getCell(f.cases[3].col, f.cases[3].row))
+            return j;
+    }
+
+    return 0;
+}
+
 bool Puissance4::isFull() const {
     // Gravité : une colonne est pleine ssi sa case du HAUT est occupée. Le plateau
     // est donc plein ssi les 7 cases de la ligne du haut le sont — une SEULE lecture,
@@ -147,8 +195,9 @@ bool Puissance4::isFull() const {
     return ((top | (top >> 1)) & 0x1555) == 0x1555;
 }
 
-int Puissance4::minimax(int depth, int alpha, int beta) const {
-    unsigned char winner = win();
+int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow) const {
+    nodes++;
+    unsigned char winner = win(lastCol, lastRow);
 
     if (winner == PLAYER2) {
         return 10000 - depth;
@@ -165,9 +214,65 @@ int Puissance4::minimax(int depth, int alpha, int beta) const {
     if(depth >= MAX_DEPTH) return evaluate();
 
     bool maximize = player == PLAYER2;
-    int best = maximize ? -INFINITY : INFINITY;
+    int best = maximize ? -P4INFINITY : P4INFINITY;
+    int cols[NB_COL];
+    int nbAC = availableColumns(cols);
+
+
+    for (int c=0;c<nbAC;c++) {
+        Puissance4 other(*this);
+
+        int row;
+        other.play(cols[c], &row);
+
+        int score = other.minimax(depth + 1, alpha, beta, cols[c], row);
+        if (maximize) {
+            best = qMax(best, score);
+            alpha = qMax(alpha, best);
+        } else {
+            best = qMin(best, score);
+            beta = qMin(beta, best);
+        }
+
+        if (alpha >= beta) {
+            break;
+        }
+    }
+
+    return best;
 }
 
 int Puissance4::evaluate() const {
     return 0;
+}
+
+int Puissance4::bestMove() const {
+    nodes = 0;   // compteur neuf pour ce coup
+    bool maximize = player == PLAYER2;
+    int best = maximize ? -P4INFINITY : P4INFINITY;
+    int move = -1;
+    int alpha = -P4INFINITY, beta = P4INFINITY;
+    int cols[NB_COL];
+    int nbAC = availableColumns(cols);
+
+    for (int c=0;c<nbAC;c++) {
+        Puissance4 other(*this);
+
+        int row;
+        other.play(cols[c], &row);
+
+        int score = other.minimax(0, alpha, beta, cols[c], row);
+        if (maximize ? score > best : score < best) {
+            best = score;
+            move = cols[c];
+        }
+
+        if (maximize) {
+            alpha = qMax(alpha, best);
+        } else {
+            beta = qMin(beta, best);
+        }
+    }
+
+    return move;
 }

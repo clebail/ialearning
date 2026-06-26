@@ -16,6 +16,11 @@ public:
     void setBoard(Puissance4 *board);
 public slots:
     void reset();   // partie neuve : vide le plateau et dégèle les clics
+signals:
+    // Émis après chaque coup de l'IA : nœuds explorés + temps de réflexion (ms).
+    void aiMoved(long nodes, double timeMs);
+    // Émis quand une nouvelle partie commence (pour remettre les cumuls à zéro).
+    void statsReset();
 protected:
     virtual void paintEvent(QPaintEvent *event);
     virtual void mouseReleaseEvent(QMouseEvent *event);

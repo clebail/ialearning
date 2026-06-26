@@ -1,6 +1,7 @@
 #include <QPainter>
 #include <QMouseEvent>
 #include <QMessageBox>
+#include <QElapsedTimer>
 #include "wpuissance4.h"
 
 WPuissance4::WPuissance4(QWidget *parent) : QWidget(parent) {
@@ -21,6 +22,7 @@ void WPuissance4::reset() {
 
     board->reset();
     gameOver = false;
+    emit statsReset();
     repaint();
 }
 
@@ -51,7 +53,7 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     if (col < 0 || !board->canPlay(col))
         return;   // clic hors grille ou colonne pleine : on ignore
 
-    const unsigned char who = board->play(col);
+    unsigned char who = board->play(col);
     repaint();
 
     if (board->win()) {
@@ -63,6 +65,30 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
 
     // Plus aucune colonne jouable et pas de gagnant → match nul.
     int colonnes[NB_COL];
+    if (board->availableColumns(colonnes) == 0) {
+        gameOver = true;
+        QMessageBox::information(this, "Fin de partie", QStringLiteral("Match nul !"));
+    }
+
+    // Tour de l'IA : on chronomètre la réflexion (bestMove) et on relève le
+    // nombre de nœuds explorés, puis on remonte ça aux stats via aiMoved.
+    QElapsedTimer timer;
+    timer.start();
+    const int aiCol = board->bestMove();
+    const double timeMs = timer.nsecsElapsed() / 1.0e6;   // ns -> ms (haute précision)
+    emit aiMoved(Puissance4::nodes, timeMs);
+
+    who = board->play(aiCol);
+    repaint();
+
+    if (board->win()) {
+        gameOver = true;
+        QMessageBox::information(this, "Fin de partie",
+                                 QStringLiteral("Le joueur %1 gagne !").arg(int(who)));
+        return;
+    }
+
+    // Plus aucune colonne jouable et pas de gagnant → match nul.
     if (board->availableColumns(colonnes) == 0) {
         gameOver = true;
         QMessageBox::information(this, "Fin de partie", QStringLiteral("Match nul !"));
