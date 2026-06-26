@@ -61,6 +61,11 @@ constexpr std::array<Fenetre, NB_FENETRE> FENETRES = construitFenetres();
 }  // namespace
 
 Puissance4::Puissance4() {
+    reset();
+}
+
+// Remet le plateau à vide, le joueur 1 reprend la main : partie neuve.
+void Puissance4::reset() {
     memset(board, 0, sizeof(unsigned short) * NB_ROW);
     player = 1;
 }
@@ -110,7 +115,7 @@ unsigned char Puissance4::play(int col) {
     setCell(col, row, player);
 
     unsigned char oldPlayer = player;
-    player = 3 - player;
+    player = PLAYERS - player;
 
     return oldPlayer;
 }

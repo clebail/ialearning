@@ -1,4 +1,6 @@
 #include <QPainter>
+#include <QMouseEvent>
+#include <QMessageBox>
 #include "wpuissance4.h"
 
 WPuissance4::WPuissance4(QWidget *parent) : QWidget(parent) {
@@ -13,6 +15,60 @@ void WPuissance4::setBoard(Puissance4 *board) {
     repaint();
 }
 
+void WPuissance4::reset() {
+    if (board == nullptr)
+        return;
+
+    board->reset();
+    gameOver = false;
+    repaint();
+}
+
+// Cases carrées → ronds (jamais d'ovales) : on prend le plus grand côté qui tient
+// à la fois en largeur et en hauteur, puis on centre la grille dans le widget.
+int WPuissance4::cellMetrics(int &offsetX, int &offsetY) const {
+    const int cell = qMin(width() / NB_COL, height() / NB_ROW);
+    offsetX = (width() - cell * NB_COL) / 2;
+    offsetY = (height() - cell * NB_ROW) / 2;
+    return cell;
+}
+
+int WPuissance4::columnAt(int x) const {
+    int offsetX, offsetY;
+    const int cell = cellMetrics(offsetX, offsetY);
+    if (cell <= 0 || x < offsetX)
+        return -1;
+
+    const int col = (x - offsetX) / cell;
+    return col < NB_COL ? col : -1;
+}
+
+void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
+    if (board == nullptr || gameOver)
+        return;
+
+    const int col = columnAt(event->pos().x());
+    if (col < 0 || !board->canPlay(col))
+        return;   // clic hors grille ou colonne pleine : on ignore
+
+    const unsigned char who = board->play(col);
+    repaint();
+
+    if (board->win()) {
+        gameOver = true;
+        QMessageBox::information(this, "Puissance 4",
+            QStringLiteral("Le joueur %1 gagne !").arg(who));
+        return;
+    }
+
+    // Plus aucune colonne jouable et pas de gagnant → match nul.
+    int colonnes[NB_COL];
+    if (board->availableColumns(colonnes) == 0) {
+        gameOver = true;
+        QMessageBox::information(this, "Puissance 4", QStringLiteral("Match nul !"));
+    }
+}
+
 void WPuissance4::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
@@ -22,11 +78,8 @@ void WPuissance4::paintEvent(QPaintEvent *) {
     if (board == nullptr)
         return;
 
-    // Cases carrées → ronds (jamais d'ovales) ; on prend le plus grand
-    // côté qui tient à la fois en largeur et en hauteur, puis on centre.
-    const int cell = qMin(width() / NB_COL, height() / NB_ROW);
-    const int offsetX = (width() - cell * NB_COL) / 2;
-    const int offsetY = (height() - cell * NB_ROW) / 2;
+    int offsetX, offsetY;
+    const int cell = cellMetrics(offsetX, offsetY);
     const int margin = qMax(2, cell / 10);
 
     painter.setPen(Qt::NoPen);

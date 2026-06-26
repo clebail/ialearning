@@ -14,10 +14,20 @@ public:
     ~WPuissance4();
 
     void setBoard(Puissance4 *board);
+public slots:
+    void reset();   // partie neuve : vide le plateau et dégèle les clics
 protected:
     virtual void paintEvent(QPaintEvent *event);
+    virtual void mouseReleaseEvent(QMouseEvent *event);
 private:
     Puissance4 *board = nullptr;
+    bool gameOver = false;   // gelé après une victoire / un match nul
+
+    // Géométrie de la grille (taille de case + décalage de centrage), partagée
+    // par le dessin et le mapping clic→colonne pour qu'ils ne dérivent jamais.
+    int cellMetrics(int &offsetX, int &offsetY) const;
+    // Colonne sous l'abscisse x du clic, ou -1 si hors grille.
+    int columnAt(int x) const;
 };
 
 #endif // WPUISSANCE4_H

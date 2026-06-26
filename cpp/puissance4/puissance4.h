@@ -5,11 +5,15 @@
 #define NB_COL              7
 #define NB_ROW              6
 #define BOARD_SIZE          (NB_COL*NB_ROW)
+#define PLAYER1             ((unsigned char)1)
+#define PLAYER2             ((unsigned char)2)
+#define PLAYERS             ((unsigned char)(PLAYER1+PLAYER2))
 
 class Puissance4 {
 public:
     Puissance4();
 
+    void reset();
     bool canPlay(int col) const;
     int availableColumns(int *a) const;
     unsigned char play(int col);
