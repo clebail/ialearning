@@ -15,7 +15,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Compteur statique : nombre de grilles explorées (partagé par tous les clones)
 Puissance4.nodes = 0;
-const MAX_DEPTH = 6;
+const MAX_DEPTH = 7;
+
+// Encodage du plateau : un seul Uint8Array(42) indexé par y * 7 + x.
+// 0 = vide, 1 = humain ('O'), 2 = IA ('X'). Bien plus dense qu'un tableau de
+// tableaux de strings, et clonable en une recopie de 42 octets (slice).
+const VIDE = 0, HUMAIN = 1, IA = 2;
+const SYMBOLE = ['', 'O', 'X'];   // entier → caractère, pour l'affichage seulement
 
 function Puissance4(container) {
     this.container = container;
@@ -27,15 +33,16 @@ function Puissance4(container) {
 
 // Relance une partie neuve. iaCommence = true → l'IA ('X') joue d'office le centre.
 Puissance4.prototype.reset = function(iaCommence) {
-    this.cells = [['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', ''],['', '', '', '', '', '', '']];
-    this.joueur = 'O';    // l'humain est 'O'
+    this.cells = new Uint8Array(42);  // 42 octets contigus, tout à 0 = vide
+    this.joueur = HUMAIN; // l'humain commence par défaut
     this.totalAB = 0;     // cumul des grilles testées — alpha-bêta
+    this.totalTimeMs = 0; // cumul du temps de réflexion de l'IA sur la partie
     this.statsAB = null;  // pas encore de coup IA mesuré
 
     // Puissance 4 est un jeu résolu : le 1er joueur gagne en démarrant au centre.
     // Si l'IA commence, on lui fait jouer le centre d'office — pas besoin de minimax.
     if (iaCommence) {
-        this.joueur = 'X';
+        this.joueur = IA;
         this.play(COLONNE_CENTRE);
     }
 
@@ -45,37 +52,29 @@ Puissance4.prototype.reset = function(iaCommence) {
 
 Puissance4.prototype.clone = function() {
     const copie = Object.create(Puissance4.prototype);  // un Puissance4 sans constructeur
-    copie.cells = structuredClone(this.cells);       // copie profonde du plateau
+    copie.cells = this.cells.slice();                // recopie plate de 42 octets — simulation pure
     copie.joueur = this.joueur;
     return copie;                                    // pas de container : simulation pure
 };
 
 Puissance4.prototype.play = function(x) {
-    if (!this.canPlay(x)) return '';
+    if (!this.canPlay(x)) return VIDE;
 
     const oldJoueur = this.joueur;
     let y = 5;
-    while (this.cells[y][x] !== '') {
+    while (this.cells[y * 7 + x] !== VIDE) {
         y--;
     }
 
-    this.cells[y][x] = this.joueur;
-    this.joueur = this.joueur === 'O' ? 'X' : 'O';
+    this.cells[y * 7 + x] = this.joueur;
+    this.joueur = this.joueur === HUMAIN ? IA : HUMAIN;
     return oldJoueur;
 }
 
+// La colonne est jouable si la case du HAUT (ligne 0) est libre.
 Puissance4.prototype.canPlay = function(x) {
-    let y;
-
-    if (x >= 0 && x < 7) {
-        for (y=5;y>=0;y--) {
-             if (this.cells[y][x] === '') {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    if (x < 0 || x >= 7) return false;
+    return this.cells[x] === VIDE;   // ligne 0 ⇒ index 0 * 7 + x = x
 }
 
 // Ordre d'exploration des colonnes : du centre vers les bords (move ordering).
@@ -91,13 +90,13 @@ Puissance4.prototype.availableColumns = function() {
 Puissance4.prototype.draw = function() {
     let body = "<table>";
 
-    this.cells.forEach((ligne, y) => {
+    for (let y = 0; y < 6; y++) {
         body += "<tr>";
-        ligne.forEach((valeur, x) => {
-            body += `<td data-x="${x}" data-y="${y}">${valeur}</td>`;
-        });
+        for (let x = 0; x < 7; x++) {
+            body += `<td data-x="${x}" data-y="${y}">${SYMBOLE[this.cells[y * 7 + x]]}</td>`;
+        }
         body += "</tr>";
-    });
+    }
 
     body += "</table>";
 
@@ -119,6 +118,7 @@ Puissance4.prototype.attachEvents = function() {
         this.statsAB = this.measure('minmaxAB');   // null tant que minmaxAB n'existe pas
         if (this.statsAB) {
             this.totalAB += this.statsAB.nodes;
+            this.totalTimeMs += Number(this.statsAB.timeMs);
         }
 
         const result = this.statsAB;
@@ -151,10 +151,10 @@ Puissance4.prototype.measure = function(scoreMethod) {
 // Affiche les stats d'exploration du dernier coup de l'IA (les deux algos)
 Puissance4.prototype.drawStats = function() {
     this.renderStatsBox(this.statsABContainer, 'Stats IA minimax α-β',
-        this.statsAB, this.totalAB, 'α-β : à implémenter (<code>minmaxAB</code>)');
+        this.statsAB, this.totalAB, this.totalTimeMs, 'α-β : à implémenter (<code>minmaxAB</code>)');
 };
 
-Puissance4.prototype.renderStatsBox = function(box, titre, stats, total, placeholder) {
+Puissance4.prototype.renderStatsBox = function(box, titre, stats, total, totalTime, placeholder) {
     if (!box) {
         return;
     }
@@ -167,9 +167,11 @@ Puissance4.prototype.renderStatsBox = function(box, titre, stats, total, placeho
     const fmt = n => n.toLocaleString('fr-FR');
     box.innerHTML = `
         <h2>${titre}</h2>
+        <p>Profondeur max (MAX_DEPTH) :<br><strong>${MAX_DEPTH}</strong></p>
         <p>Grilles testées (ce coup) :<br><strong>${fmt(stats.nodes)}</strong></p>
-        <p>Temps de calcul :<br><strong>${stats.timeMs} ms</strong></p>
+        <p>Temps de réflexion (ce coup) :<br><strong>${stats.timeMs} ms</strong></p>
         <p>Total cumulé (partie) :<br><strong>${fmt(total)}</strong></p>
+        <p>Temps de réflexion global (partie) :<br><strong>${totalTime.toFixed(1)} ms</strong></p>
     `;
 };
 
@@ -178,7 +180,7 @@ Puissance4.prototype.announceIfOver = function() {
     const winner = this.win();
 
     if (winner) {
-        alert(winner + " gagne !");
+        alert(SYMBOLE[winner] + " gagne !");
     } else if (this.isFull()) {
         alert("Match nul !");
     }
@@ -189,8 +191,8 @@ Puissance4.prototype.announceIfOver = function() {
 Puissance4.prototype.win = function() {
     for (const cases of Puissance4.FENETRES) {
         const [x0, y0] = cases[0];
-        const j = this.cells[y0][x0];
-        if (j !== '' && cases.every(([x, y]) => this.cells[y][x] === j)) return j;
+        const j = this.cells[y0 * 7 + x0];
+        if (j !== VIDE && cases.every(([x, y]) => this.cells[y * 7 + x] === j)) return j;
     }
     return null;
 }
@@ -228,7 +230,7 @@ function construitFenetres() {
 Puissance4.FENETRES = construitFenetres();
 
 Puissance4.prototype.isFull = function() {
-    return this.cells.every(ligne => ligne.every(c => c !== ''));
+    return this.cells.every(c => c !== VIDE);
 }
 
 Puissance4.prototype.isOver = function() {
@@ -241,12 +243,12 @@ Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = In
 
     const winner = this.win();
 
-    if (winner === 'X')  {
-        return 10000 - depth;   // 'X' gagne (favorise victoire rapide)
+    if (winner === IA)  {
+        return 10000 - depth;   // l'IA ('X') gagne (favorise victoire rapide)
     }
 
-    if (winner === 'O')  {
-        return -10000 + depth;  // 'O' gagne
+    if (winner === HUMAIN)  {
+        return -10000 + depth;  // l'humain ('O') gagne
     }
 
     if (this.isFull()) {
@@ -255,7 +257,7 @@ Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = In
 
     if(depth >= MAX_DEPTH) return this.evaluate();
 
-    const maximise = this.joueur === 'X';      // 'X' maximise, 'O' minimise
+    const maximise = this.joueur === IA;       // l'IA maximise, l'humain minimise
     let best = maximise ? -Infinity : Infinity;
 
     for (const x of this.availableColumns()) {
@@ -280,7 +282,7 @@ Puissance4.prototype.minmaxAB = function(depth = 0, alpha = -Infinity, beta = In
 
 // Retourne la MEILLEURE COLONNE pour le joueur courant.
 Puissance4.prototype.bestMove = function( ) {
-    const maximise = this.joueur === 'X';
+    const maximise = this.joueur === IA;
     let best = maximise ? -Infinity : Infinity;
     let move = null;
     let alpha = -Infinity, beta = Infinity;   // bornes threadées vers les sous-arbres
@@ -313,9 +315,9 @@ Puissance4.prototype.evaluate = function( ) {
     for (const cases of Puissance4.FENETRES) {
         let nbX = 0, nbO = 0;
         for (const [x, y] of cases) {
-            const c = this.cells[y][x];
-            if (c === 'X') nbX++;
-            else if (c === 'O') nbO++;
+            const c = this.cells[y * 7 + x];
+            if (c === IA) nbX++;
+            else if (c === HUMAIN) nbO++;
         }
         if (nbX && nbO) continue;            // fenêtre morte : les deux camps y sont présents
 
@@ -328,10 +330,42 @@ Puissance4.prototype.evaluate = function( ) {
     // Bonus centre : un pion au milieu est plus flexible (dans le plus de fenêtres).
     // Petit poids → ne départage qu'à menaces égales (typiquement en début de partie).
     for (let y = 0; y < 6; y++) {
-        const c = this.cells[y][COLONNE_CENTRE];
-        if (c === 'X') score += BONUS_CENTRE;
-        else if (c === 'O') score -= BONUS_CENTRE;
+        const c = this.cells[y * 7 + COLONNE_CENTRE];
+        if (c === IA) score += BONUS_CENTRE;
+        else if (c === HUMAIN) score -= BONUS_CENTRE;
     }
 
     return score;
+}
+
+// Test mémoire : combien pèsent 10 000 plateaux Puissance 4 ?
+// On crée 10 000 objets et on les GARDE référencés (tableau) pour empêcher le GC
+// de les ramasser avant la mesure. On clone un plateau de base : un clone est un
+// Puissance4 sans container, réduit à ce que le minimax alloue par nœud (cells + joueur)
+// — c'est l'objet dont l'empreinte nous intéresse.
+// NB : performance.memory n'existe que sous Chromium ; pour des chiffres fiables, lancer
+// le navigateur avec --enable-precise-memory-info (sinon valeurs arrondies/bruitées).
+function test() {
+    const N = 100000;
+
+    if (!performance.memory) {
+        alert("performance.memory indisponible (Chrome/Edge requis).");
+        return;
+    }
+
+    const base = new Puissance4(document.querySelector('#game'));
+
+    const avant = performance.memory.usedJSHeapSize;
+
+    const objets = new Array(N);
+    for (let i = 0; i < N; i++) {
+        objets[i] = base.clone();
+    }
+
+    const apres = performance.memory.usedJSHeapSize;
+    const delta = apres - avant;
+
+    const msg = `${N} plateaux : ${(delta / 1024).toFixed(1)} Kio total — ~${(delta / N).toFixed(1)} octets / objet`;
+    console.log(msg, objets.length);   // objets.length référence le tableau (anti-GC)
+    alert(msg);
 }

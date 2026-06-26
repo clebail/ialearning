@@ -220,6 +220,21 @@ Deux radios au-dessus de la grille (« Moi » / « L'IA »). À chaque changemen
 - `reset` : vide `cells`, `joueur = 'O'` (l'humain), compteurs à 0, `statsAB = null`, redessine. Si `iaCommence` : `joueur = 'X'` puis `play(COLONNE_CENTRE)` (qui rebascule `joueur` vers `'O'` → à l'humain de jouer).
 - **Leçon** : avec la délégation d'événements, le handler vit sur le **conteneur** (qui survit aux redraws), pas sur les cases. Donc on **ne réattache jamais** ; on ne fait que réinitialiser l'état. `location.reload()` était exclu : il remettrait les radios à leur défaut, perdant le choix « IA commence ».
 
+### Plateau en tableau plat `Uint8Array(42)` — refacto perf — fait ✅
+On remplace le **tableau 2D de chaînes** (`[['','',...], ...]`, 6×7 strings `'O'`/`'X'`/`''`) par un **`Uint8Array(42)` plat**, indexé `y * 7 + x`. Refacto **iso-comportement** (l'IA joue pareil) — uniquement la représentation du plateau change. Motivation : le minimax explore des millions de grilles, chacune **clonée** à chaque nœud → le coût de la copie domine.
+- **Encodage entier** : constantes `VIDE = 0`, `HUMAIN = 1` (`'O'`), `IA = 2` (`'X'`), et une table `SYMBOLE = ['', 'O', 'X']` pour reconvertir **entier → caractère à l'affichage uniquement** (`draw`, alerte de victoire). Tout le reste du code raisonne en entiers.
+- **Clonage : `structuredClone` → `this.cells.slice()`**. C'est le vrai gain. Cloner un tableau 2D de strings = copie profonde de 6 sous-tableaux + 42 références de chaînes ; cloner un `Uint8Array` = **recopie plate de 42 octets contigus**, sans allocation par case. C'est l'opération du **point chaud** du minimax.
+- **`canPlay` accéléré au passage** : la colonne est jouable ssi la case du **haut** est libre → `cells[x] === VIDE` (ligne 0 ⇒ index `0*7+x = x`), un seul accès au lieu de scanner la colonne de bas en haut.
+- **Conversions en cascade** (toutes les comparaisons `=== 'X'/'O'/''` → entiers, tous les accès `cells[y][x]` → `cells[y*7+x]`) : `play`, `draw`, `win`, `isFull`, `minmaxAB`, `bestMove`, `evaluate`, `announceIfOver`. `win()` retourne désormais l'**entier** du gagnant (`HUMAIN`/`IA`) → l'alerte fait `SYMBOLE[winner]`. `isFull` se simplifie : `cells.every(c => c !== VIDE)` (plus de double boucle de lignes).
+- **Piège du refacto à mi-chemin** : le haut du fichier était converti mais le bas (`win`/`isFull`/`minmaxAB`/`evaluate`/…) lisait encore l'ancien encodage 2D → plateau incohérent (mélange `cells[y][x]` et `cells[y*7+x]`). Leçon : un changement de représentation doit balayer **toutes** les fonctions d'un coup ; un `grep` final sur `\]\[`, `=== 'X'`, `=== 'O'`, `=== ''` confirme qu'il ne reste plus un seul accès à l'ancienne forme (hors commentaires et table `SYMBOLE`).
+- **Leçon** : choisir la structure de données pour le **point chaud**. Ici le minimax est dominé par le clonage à chaque nœud — un `Uint8Array` se copie en un `memcpy` de 42 octets, là où le tableau 2D de strings paie allocation + GC à chaque grille explorée.
+
+### Stats : temps de réflexion cumulé + `MAX_DEPTH` affiché — fait ✅
+Petits ajouts à la box de stats α-β, dans la foulée du portage C++ (comparer les perfs JS ↔ C++).
+- **Cumul du temps de réflexion sur la partie** : `totalTimeMs` (remis à 0 dans `reset`, incrémenté de `statsAB.timeMs` à chaque coup IA). On a déjà le total des grilles testées (`totalAB`) ; on ajoute la **durée cumulée** — `renderStatsBox` prend un paramètre `totalTime` de plus, affiché en bas de la box.
+- **`MAX_DEPTH` affiché** dans la box (profondeur de recherche), pour rendre lisible le paramètre qui pilote temps de calcul ↔ force de l'IA.
+- **`MAX_DEPTH` : 6 → 7**. Un cran plus profond = IA plus forte, au prix d'un temps de réflexion (et d'un nombre de grilles) en hausse — précisément ce que la box rend désormais visible.
+
 ## Awalé (Oware) — prochaine étape (pas encore commencé)
 
 Choisi **à la place des dames** : on **réutilise tout le moteur** (minimax, α-β, profondeur limitée, `evaluate`, move ordering, threading racine) — le seul code neuf est la mécanique du jeu. Et la « génération des coups légaux » (ce qui fait peur pour les échecs) y est **triviale**.
