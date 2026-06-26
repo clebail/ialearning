@@ -120,7 +120,7 @@ unsigned char Puissance4::play(int col) {
     return oldPlayer;
 }
 
-bool Puissance4::win() const {
+unsigned char Puissance4::win() const {
     for (const Fenetre &f : FENETRES) {
         unsigned char j = getCell(f.cases[0].col, f.cases[0].row);
         if (j == 0) continue;  // fenêtre vide sur sa 1re case -> pas un alignement
@@ -128,8 +128,46 @@ bool Puissance4::win() const {
         if (j == getCell(f.cases[1].col, f.cases[1].row)
          && j == getCell(f.cases[2].col, f.cases[2].row)
          && j == getCell(f.cases[3].col, f.cases[3].row))
-            return true;
+            return j;
     }
 
-    return false;
+    return 0;
+}
+
+bool Puissance4::isFull() const {
+    // Gravité : une colonne est pleine ssi sa case du HAUT est occupée. Le plateau
+    // est donc plein ssi les 7 cases de la ligne du haut le sont — une SEULE lecture,
+    // board[NB_ROW-1], au lieu de balayer les 6 lignes.
+    const unsigned short top = board[NB_ROW - 1];
+
+    // Chaque case = 2 bits (00 vide, 01 / 10 occupée — jamais 11). On replie les 2 bits
+    // de chaque case sur son bit BAS : (top | top>>1) pose le bit bas du groupe dès qu'un
+    // des deux bits est mis. Les 7 colonnes ont leur bit bas en 0,2,4,6,8,10,12 → masque
+    // 0x1555. Plateau plein ⇔ ces 7 bits valent tous 1.
+    return ((top | (top >> 1)) & 0x1555) == 0x1555;
+}
+
+int Puissance4::minimax(int depth, int alpha, int beta) const {
+    unsigned char winner = win();
+
+    if (winner == PLAYER2) {
+        return 10000 - depth;
+    }
+
+    if (winner == PLAYER1) {
+        return -10000 + depth;
+    }
+
+    if (isFull()) {
+        return 0;
+    }
+
+    if(depth >= MAX_DEPTH) return evaluate();
+
+    bool maximize = player == PLAYER2;
+    int best = maximize ? -INFINITY : INFINITY;
+}
+
+int Puissance4::evaluate() const {
+    return 0;
 }
