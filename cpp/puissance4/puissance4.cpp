@@ -71,24 +71,24 @@ void Puissance4::reset() {
 }
 
 unsigned char Puissance4::getCell(int col, int row) const  {
-    if (row >= 0 && row < NB_ROW && col >= 0 && col < NB_COL) {
-        int decal = CELL_BIT_COUNT * (NB_COL - col - 1);
-        unsigned short value = (board[row] >> decal) & 0x0003;
+    // Précondition : indices dans le plateau. Tous les appelants la garantissent
+    // (canPlay valide col, play borne row, FENETRES est in-bounds par construction).
+    // Q_ASSERT s'efface en release → zéro coût sur ce point chaud du minimax.
+    Q_ASSERT(col >= 0 && col < NB_COL && row >= 0 && row < NB_ROW);
 
-        return (unsigned char)value;
+    int decal = CELL_BIT_COUNT * (NB_COL - col - 1);
+    unsigned short value = (board[row] >> decal) & 0x0003;
 
-    }
-
-    return 0;
+    return (unsigned char)value;
 }
 
 void Puissance4::setCell(int col, int row, unsigned char value) {
-    if (row >= 0 && row < NB_ROW && col >= 0 && col < NB_COL) {
-        int decal = CELL_BIT_COUNT * (NB_COL - col - 1);
-        unsigned short newValue = ((unsigned short)(value & 0x03) << decal);
-        board[row] = board[row] & ~newValue;
-        board[row] |= newValue;
-    }
+    Q_ASSERT(col >= 0 && col < NB_COL && row >= 0 && row < NB_ROW);
+
+    int decal = CELL_BIT_COUNT * (NB_COL - col - 1);
+    unsigned short newValue = ((unsigned short)(value & 0x03) << decal);
+    board[row] = board[row] & ~newValue;
+    board[row] |= newValue;
 }
 
 bool Puissance4::canPlay(int col) const {
