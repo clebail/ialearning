@@ -18,15 +18,142 @@
     <normaloff>:/icon.png</normaloff>:/icon.png</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="WPuissance4" name="wPuissance4" native="true"/>
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="WPuissance4" name="wPuissance4" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+          <horstretch>1</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>350</width>
+          <height>300</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="bottomLayout">
+        <item>
+         <widget class="QLabel" name="starterLabel">
+          <property name="text">
+           <string>Qui commence :</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="radioHuman">
+          <property name="text">
+           <string>Moi</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QRadioButton" name="radioIA">
+          <property name="text">
+           <string>L'IA</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="bottomSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="rejouerButton">
+          <property name="text">
+           <string>Rejouer</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
     </item>
     <item>
-     <widget class="QPushButton" name="rejouerButton">
-      <property name="text">
-       <string>Rejouer</string>
+     <widget class="QGroupBox" name="statsBox">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
       </property>
+      <property name="minimumSize">
+       <size>
+        <width>220</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="title">
+       <string>Stats IA minimax α-β</string>
+      </property>
+      <layout class="QVBoxLayout" name="statsLayout">
+       <item>
+        <widget class="QLabel" name="statDepth">
+         <property name="text">
+          <string>Profondeur max (MAX_DEPTH) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="statNodes">
+         <property name="text">
+          <string>Grilles testées (ce coup) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="statTime">
+         <property name="text">
+          <string>Temps de réflexion (ce coup) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="statTotal">
+         <property name="text">
+          <string>Total cumulé (partie) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="statTotalTime">
+         <property name="text">
+          <string>Temps de réflexion global (partie) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="statsSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
      </widget>
     </item>
    </layout>
