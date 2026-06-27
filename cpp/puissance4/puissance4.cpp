@@ -162,6 +162,27 @@ unsigned char Puissance4::win() const {
     return 0;
 }
 
+// Comme win() (balayage des 69 fenêtres) mais expose les 4 cases gagnantes, pour
+// que l'UI puisse les surligner. Utilisé hors point chaud (fin de partie seulement).
+bool Puissance4::winningLine(int cols[4], int rows[4]) const {
+    for (const Fenetre &f : FENETRES) {
+        unsigned char j = getCell(f.cases[0].col, f.cases[0].row);
+        if (j == 0) continue;
+
+        if (j == getCell(f.cases[1].col, f.cases[1].row)
+         && j == getCell(f.cases[2].col, f.cases[2].row)
+         && j == getCell(f.cases[3].col, f.cases[3].row)) {
+            for (int i = 0; i < 4; i++) {
+                cols[i] = f.cases[i].col;
+                rows[i] = f.cases[i].row;
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // Variante incrémentale appelée par le minimax : on sait qu'un seul jeton vient
 // d'être posé en (lastCol, lastRow), donc seules les fenêtres passant par cette case
 // peuvent former un nouvel alignement. ≤ 13 fenêtres testées au lieu de 69.
@@ -243,7 +264,44 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
 }
 
 int Puissance4::evaluate() const {
-    return 0;
+    int score = 0;
+
+    for (const Fenetre &f : FENETRES) {
+        int nbX = 0, nbO = 0;
+        for (const auto &[x, y] : f.cases) {
+            unsigned char c = getCell(x, y);
+
+            if (c == PLAYER2){
+                nbX++;
+            } else if (c == PLAYER1) {
+                nbO++;
+            }
+        }
+        if (nbX && nbO) continue;            // fenêtre morte : les deux camps y sont présents
+
+        if (nbX == 3) {
+            score += 1000;
+        } else if (nbX == 2) {
+            score += 100;
+        } else if (nbO == 3) {
+            score -= 1000;
+        } else if (nbO == 2) {
+            score -= 100;
+        }
+    }
+
+    // Bonus centre : un pion au milieu est plus flexible (dans le plus de fenêtres).
+    // Petit poids → ne départage qu'à menaces égales (typiquement en début de partie).
+    for (int y = 0; y < NB_ROW; y++) {
+        unsigned char c = getCell(COLONNE_CENTRE, y);
+        if (c == PLAYER2) {
+            score += BONUS_CENTRE;
+        } else if (c == PLAYER1) {
+            score -= BONUS_CENTRE;
+        }
+    }
+
+    return score;
 }
 
 int Puissance4::bestMove() const {

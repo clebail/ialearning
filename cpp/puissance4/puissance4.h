@@ -9,7 +9,9 @@
 #define PLAYER2             ((unsigned char)2)
 #define PLAYERS             ((unsigned char)(PLAYER1+PLAYER2))
 #define P4INFINITY          ((int)1000000)
-#define MAX_DEPTH           11
+#define MAX_DEPTH           10
+#define COLONNE_CENTRE      3
+#define BONUS_CENTRE        30
 
 class Puissance4 {
 public:
@@ -25,6 +27,9 @@ public:
     unsigned char play(int col, int *rowOut = nullptr);
     unsigned char getCell(int col, int row) const;
     unsigned char win() const;
+    // Si la partie est gagnée, remplit cols[4]/rows[4] avec les cases de l'alignement
+    // gagnant et renvoie true ; sinon renvoie false (sorties inchangées).
+    bool winningLine(int cols[4], int rows[4]) const;
     bool isFull() const;
     int bestMove() const;
 

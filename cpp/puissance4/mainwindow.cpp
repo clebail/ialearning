@@ -20,7 +20,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setupUi(this);
 
     wPuissance4->setBoard(&p4);
-    connect(rejouerButton, &QPushButton::clicked, wPuissance4, &WPuissance4::reset);
+
+    // Nouvelle partie : on vide le plateau, puis si le radio « L'IA » est coché,
+    // on lui laisse poser le premier pion.
+    connect(rejouerButton, &QPushButton::clicked, this, [this] {
+        wPuissance4->reset();
+        if (radioIA->isChecked())
+            wPuissance4->aiStart();
+    });
 
     // Profondeur : fixe, posée une fois pour toutes.
     setStatValue(statDepth, QString::number(MAX_DEPTH));

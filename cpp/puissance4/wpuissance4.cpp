@@ -4,8 +4,28 @@
 #include <QElapsedTimer>
 #include "wpuissance4.h"
 
+namespace {
+// Pulsation de la dernière boule : 10 frames "petit" puis 10 frames "grand".
+constexpr int PULSE_PHASE_FRAMES = 10;                       // frames par état
+constexpr int PULSE_TOTAL_FRAMES = 2 * PULSE_PHASE_FRAMES;   // 10 petits + 10 grands
+constexpr double PULSE_SMALL = 0.6;                          // échelle du disque "petit"
+constexpr double PULSE_LARGE = 1.0;                          // échelle du disque "grand"
+}  // namespace
+
 WPuissance4::WPuissance4(QWidget *parent) : QWidget(parent) {
     setupUi(this);
+
+    // Un tick = une frame ; après PULSE_TOTAL_FRAMES on arrête et la boule
+    // reprend sa taille normale.
+    pulseTimer.setInterval(16);
+    connect(&pulseTimer, &QTimer::timeout, this, [this] {
+        pulseFrame++;
+        if (pulseFrame >= PULSE_TOTAL_FRAMES) {
+            pulseTimer.stop();
+            lastCol = lastRow = -1;
+        }
+        update();
+    });
 }
 
 WPuissance4::~WPuissance4() {
@@ -22,6 +42,9 @@ void WPuissance4::reset() {
 
     board->reset();
     gameOver = false;
+    hasWin = false;
+    pulseTimer.stop();
+    lastCol = lastRow = -1;
     emit statsReset();
     repaint();
 }
@@ -53,11 +76,16 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     if (col < 0 || !board->canPlay(col))
         return;   // clic hors grille ou colonne pleine : on ignore
 
+    // Pas d'animation sur le coup humain : bestMove() bloque ensuite la boucle
+    // d'événements (le timer ne tournerait pas) → la boule resterait figée petite.
+    // Seul le coup de l'IA est animé.
     unsigned char who = board->play(col);
     repaint();
 
-    if (board->win()) {
+    if (board->winningLine(winCols, winRows)) {
         gameOver = true;
+        hasWin = true;
+        repaint();   // dessine les croix avant la boîte de dialogue modale
         QMessageBox::information(this, "Fin de partie",
             QStringLiteral("Le joueur %1 gagne !").arg(int(who)));
         return;
@@ -68,7 +96,34 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     if (board->availableColumns(colonnes) == 0) {
         gameOver = true;
         QMessageBox::information(this, "Fin de partie", QStringLiteral("Match nul !"));
+        return;
     }
+
+    aiTurn();
+}
+
+void WPuissance4::aiStart() {
+    if (board == nullptr || gameOver)
+        return;
+
+    // Ouverture forcée : sur plateau vide le centre est le meilleur coup connu.
+    // On le joue directement, sans lancer le minimax (réflexion inutile et coûteuse).
+    int row;
+    board->play(COLONNE_CENTRE, &row);
+    startPulse(COLONNE_CENTRE, row);
+    repaint();
+}
+
+void WPuissance4::startPulse(int col, int row) {
+    lastCol = col;
+    lastRow = row;
+    pulseFrame = 0;       // repart de zéro même si une pulsation est en cours (jeu rapide)
+    pulseTimer.start();   // relance le timer s'il tournait déjà
+}
+
+void WPuissance4::aiTurn() {
+    if (board == nullptr || gameOver)
+        return;
 
     // Tour de l'IA : on chronomètre la réflexion (bestMove) et on relève le
     // nombre de nœuds explorés, puis on remonte ça aux stats via aiMoved.
@@ -78,17 +133,22 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     const double timeMs = timer.nsecsElapsed() / 1.0e6;   // ns -> ms (haute précision)
     emit aiMoved(Puissance4::nodes, timeMs);
 
-    who = board->play(aiCol);
+    int row;
+    unsigned char who = board->play(aiCol, &row);
+    startPulse(aiCol, row);
     repaint();
 
-    if (board->win()) {
+    if (board->winningLine(winCols, winRows)) {
         gameOver = true;
+        hasWin = true;
+        repaint();   // dessine les croix avant la boîte de dialogue modale
         QMessageBox::information(this, "Fin de partie",
                                  QStringLiteral("Le joueur %1 gagne !").arg(int(who)));
         return;
     }
 
     // Plus aucune colonne jouable et pas de gagnant → match nul.
+    int colonnes[NB_COL];
     if (board->availableColumns(colonnes) == 0) {
         gameOver = true;
         QMessageBox::information(this, "Fin de partie", QStringLiteral("Match nul !"));
@@ -116,13 +176,38 @@ void WPuissance4::paintEvent(QPaintEvent *) {
             // row 0 = bas du plateau → dessiné en bas de la fenêtre
             int x = offsetX + col * cell;
             int y = offsetY + (NB_ROW - 1 - row) * cell;
-            QRect disc(x + margin, y + margin,
-                       cell - 2 * margin, cell - 2 * margin);
+            QRectF disc(x + margin, y + margin,
+                        cell - 2 * margin, cell - 2 * margin);
+
+            // Dernière boule jouée : 6 frames petit, 6 frames grand, tant que le timer tourne.
+            if (col == lastCol && row == lastRow && pulseTimer.isActive()) {
+                const bool grand = (pulseFrame / PULSE_PHASE_FRAMES) % 2 == 1;
+                const double scale = grand ? PULSE_LARGE : PULSE_SMALL;
+                const QPointF c = disc.center();
+                disc.setSize(disc.size() * scale);
+                disc.moveCenter(c);
+            }
 
             painter.setBrush(value & 1 ? QColor(240, 138, 138)
                                        : (value & 2 ? QColor(130, 170, 230)
                                                     : QColor(245, 245, 245)));
             painter.drawEllipse(disc);
+        }
+    }
+
+    // Alignement gagnant : une croix (X) au centre de chacune des 4 boules.
+    if (hasWin) {
+        QPen pen(QColor(40, 40, 40));
+        pen.setWidth(qMax(3, cell / 7));   // trait plus gras
+        pen.setCapStyle(Qt::RoundCap);
+        painter.setPen(pen);
+
+        const int r = qRound((cell - 2 * margin) * 0.16);   // demi-diagonale du X (plus petite)
+        for (int i = 0; i < 4; i++) {
+            const int cx = offsetX + winCols[i] * cell + cell / 2;
+            const int cy = offsetY + (NB_ROW - 1 - winRows[i]) * cell + cell / 2;
+            painter.drawLine(cx - r, cy - r, cx + r, cy + r);
+            painter.drawLine(cx - r, cy + r, cx + r, cy - r);
         }
     }
 }
