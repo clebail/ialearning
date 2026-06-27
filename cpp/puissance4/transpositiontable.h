@@ -12,12 +12,6 @@ public:
         uint64_t hash;
         int depth;
         int score;
-
-        /*_SEntry(uint64_t hash, int depth, int score) {
-            this->hash = hash;
-            this->depth = depth;
-            this->score = score;
-        }*/
     } SEntry;
 
     static TranspositionTable* getInstance();

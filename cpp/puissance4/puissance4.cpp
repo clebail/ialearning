@@ -2,6 +2,7 @@
 #include <array>
 #include <QtDebug>
 #include "puissance4.h"
+#include "transpositiontable.h"
 
 const int Puissance4::COLUMNS_ORDER[NB_COL] = {3, 2, 4, 1, 5, 0, 6};
 
@@ -232,6 +233,13 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
         return 0;
     }
 
+    uint64_t hash = TranspositionTable::getInstance()->getHash(*this, player);
+    int score = TranspositionTable::getInstance()->getScore(hash, depth);
+
+    if (score != P4INFINITY) {
+        // return score;
+    }
+
     if(depth >= MAX_DEPTH) return evaluate();
 
     bool maximize = player == PLAYER2;
@@ -246,7 +254,7 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
         int row;
         other.play(cols[c], &row);
 
-        int score = other.minimax(depth + 1, alpha, beta, cols[c], row);
+        score = other.minimax(depth + 1, alpha, beta, cols[c], row);
         if (maximize) {
             best = qMax(best, score);
             alpha = qMax(alpha, best);
@@ -259,6 +267,8 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
             break;
         }
     }
+
+    TranspositionTable::getInstance()->setScore(hash, depth, best);
 
     return best;
 }

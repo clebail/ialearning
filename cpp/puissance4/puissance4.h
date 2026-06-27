@@ -9,7 +9,7 @@
 #define PLAYER2             ((unsigned char)2)
 #define PLAYERS             ((unsigned char)(PLAYER1+PLAYER2))
 #define P4INFINITY          ((int)1000000)
-#define MAX_DEPTH           10
+#define MAX_DEPTH           14
 #define COLONNE_CENTRE      3
 #define BONUS_CENTRE        30
 

@@ -1,7 +1,7 @@
 # Plan vidéo — Puissance 4 minimax : du JS au C++
 
 > Document de travail, étoffé au fur et à mesure.
-> Synopsis : **1 motivations · 2 version 1 en JS · 3 version 2 en C++ · 4 verdict**
+> Synopsis : **1 motivations · 2 version 1 en JS · 3 version 2 en C++ · 4 verdict · 5 confrontation au solveur**
 > Détails techniques de chaque étape : voir [`minimax-suivi.md`](minimax-suivi.md).
 
 ## Fil rouge
@@ -10,8 +10,27 @@ Une seule idée porte les 4 parties et donne la chute :
 
 > **force ≈ profondeur atteinte × qualité de l'évaluation**
 
-Motivations, JS, C++ et verdict ne sont que 4 angles sur cette équation. Le C++ ne
+Les cinq parties ne sont que des angles sur cette même équation. Le C++ ne
 touche pas à l'heuristique : il achète de la **profondeur**. C'est ça, le verdict.
+
+## Intention — le cadrage honnête (les 3 messages)
+
+⚠️ **Le but n'est PAS de créer l'algorithme parfait.** Vidéo pédagogique, pas démo de prouesse.
+Trois messages, et c'est tout :
+
+1. **Le choix du langage compte.** *JS* : rapide à écrire, **sans risque** (pas de crash mémoire),
+   boucle de feedback courte — mais on est vite **borné par l'interpréteur**. *C++* : plus puissant,
+   moins facile, **plus de crashs possibles** (segfault, mémoire), mais ouvre les **optimisations
+   mémoire & vitesse** → donc la **profondeur**. Le langage est un *levier de profondeur*.
+
+2. **Les bonnes idées algo comptent autant.** Au-delà du langage, des idées comme la **table de
+   transposition** font descendre **encore plus bas, sans souci** : de **7 (JS) à 12** plis. Deux
+   leviers distincts pour la même équation — le **langage** ET l'**algo**.
+
+3. **Attention aux faux positifs — leçon d'humilité.** Notre heuristique reste une **évaluation**
+   du meilleur coup, pas une vérité : elle peut se tromper **avec aplomb** (faux positifs), et
+   **elle ne battra jamais un algo qui explore le chemin complet** (solveur parfait, jeu résolu).
+   Plus de profondeur + de bonnes idées *rapprochent* du parfait — **sans jamais l'atteindre**.
 
 ---
 
@@ -58,7 +77,11 @@ C++ permet et que le JS ne pouvait pas :
   lieu de 69 (`FENETRES_PAR_CASE`, figé au build).
 - **Bitboard** (6 `unsigned short`, 2 bits/case) + **stats par signaux** (`aiMoved`) +
   `Q_ASSERT` vs garde silencieuse — en B-roll.
-- **Payoff** : `MAX_DEPTH` poussé à **10** (vs 7 en JS), temps encore acceptable.
+- **Table de transposition** : ne pas recalculer un sous-arbre déjà vu (*transposition* = même
+  position atteinte par un autre ordre de coups). Clé **exacte compacte 49 bits** (`position + mask`).
+  L'**idée algo** qui pousse la profondeur au-delà du seul gain de langage.
+- **Payoff** : `MAX_DEPTH` **7 (JS) → 10 (C++) → 12 (C++ + TT)**, temps encore acceptable. Deux
+  leviers : le **langage** (7→10) ET l'**idée algo** (10→12).
 - 🎬 **Démo** : même position que la démo JS, mais profondeur 10.
 
 ## 4 — Verdict (retour à l'équation)
@@ -69,12 +92,55 @@ C++ permet et que le JS ne pouvait pas :
 - **La nuance qui surprend** : à profondeur 10, l'IA C++ joue déjà très bien **même avec
   `evaluate ≡ 0`** — la profondeur a saturé la tactique. « J'ai débranché l'heuristique, elle
   gagne quand même. »
+- **Leçon d'humilité (faux positifs)** : notre heuristique n'est qu'une **évaluation** du meilleur
+  coup, pas une vérité — elle peut se tromper avec aplomb, et **ne battra jamais un algo qui voit le
+  chemin complet** (solveur parfait). Profondeur + bonnes idées *rapprochent* du parfait, sans l'atteindre.
 - **Coût honnête** : C++ = compilation, mémoire, setup Qt, itération lente. JS = prototypage
   immédiat, l'heuristique se règle en rechargeant la page.
 - **Conclusion utilisable** : prototyper l'algo + l'heuristique en JS (boucle de feedback
   courte), porter en C++ pour la profondeur/perf. Deux **étapes**, pas deux concurrents.
 - 🎬 **Clôture** : retour au plan d'ouverture (les deux apps), annonce de la suite — confronter
   l'IA C++ au solveur parfait de gamesolver.org.
+
+## 5 — Confrontation au solveur parfait (l'épreuve de vérité)
+
+L'adversaire : **<https://connect4.gamesolver.org>** (solveur de Pascal Pons), l'**oracle
+parfait** — le Puissance 4 est *résolu* depuis 1988. C'est le crash-test ultime de l'équation :
+mon IA voit ~10 plis + une heuristique bricolée ; lui voit **jusqu'au bout**.
+
+- **La prémisse fausse à casser d'entrée** : « ça finira nul ». Non — le Puissance 4 résolu,
+  c'est **le 1er joueur qui gagne** en jeu parfait (en ouvrant au centre). L'issue est fixée
+  par *qui commence*, pas par un nul. Et **mon IA n'est pas parfaite** → face à l'oracle,
+  l'écart se voit forcément.
+
+- **Le premier essai (résultat réel)** 🎬 : mon IA ouvre **au centre** — donc elle part d'une
+  position **théoriquement gagnante** — et elle **perd**. C'est *le* moment fort : elle tenait
+  la victoire et l'a lâchée. Au Puissance 4 résolu, **un seul coup sous-optimal** fait basculer
+  la position de gagnée à perdue, et l'oracle **ne la rend jamais**. L'ouverture (centre forcé)
+  est bonne par construction → l'erreur est **plus loin** : soit l'horizon de 10 trop court pour
+  voir le piège, soit l'éval a mal jugé. *Illustration directe de « imbattable = jeu résolu,
+  pas heuristique » et de `force = profondeur × éval`.*
+
+- **Le contenu qui tue — l'analyse coup par coup** : rejouer la séquence dans le solveur et
+  trouver **le coup exact où le score bascule** de gagnant à perdant. La phrase de la vidéo :
+  « *mon IA a joué N coups parfaits, puis a lâché la victoire au coup N+1 — le voici, et voilà
+  pourquoi son heuristique s'est trompée* ». Chiffrable : **nombre de coups optimaux avant la
+  1ʳᵉ erreur**.
+
+- **L'outil** 👤 : l'API (non documentée mais publique) `GET …/solve?pos=<colonnes 1-indexées>`
+  renvoie un **score par colonne** (signe = issue, magnitude = vitesse). On l'appelle depuis un
+  **petit script Node** (hors navigateur → contourne le **CORS**), 1 requête/coup, poliment.
+  Détails techniques + format de réponse : voir [`minimax-suivi.md`](minimax-suivi.md).
+
+- **Les deux scénarios à filmer** :
+  - *Mon IA ouvre (centre)* → sait-elle **convertir** une position gagnante face à une défense
+    parfaite ? (le 1er essai dit : non — c'est le segment pédago).
+  - *Le solveur ouvre* → il gagne (parfait), mon IA part perdue → **combien de temps tient-elle**,
+    à quel coup craque-t-elle ?
+
+- 🎬 **Mise en scène possible** : segment 1 = vs solveur parfait (démo pédago, l'instant du
+  basculement). Segment 2 (spectacle) = vs une IA à difficulté réglable (play4row niveau moyen),
+  match plus disputé.
 
 ---
 
@@ -85,3 +151,11 @@ Les deux UIs affichent déjà nœuds + temps. Sur **une même position** :
 - [ ] JS et C++ à **profondeur égale** (ex. 7) → écart de nœuds / ms.
 - [ ] Temps du **1er coup C++ à profondeur 10**.
 - [ ] (option) C++ profondeur 10 avec `evaluate ≡ 0` vs avec heuristique → différence de jeu.
+
+Pour la partie 5 (confrontation au solveur) :
+
+- [ ] **Séquence des colonnes** de la partie perdue (mon IA ouvre au centre) — à logger
+      (`qDebug() << col;`) puis rejouer.
+- [ ] Sortie du **script Node** d'analyse coup-par-coup : colonne jouée vs optimale, **coup du
+      basculement** gagnant→perdant, **nb de coups optimaux avant la 1ʳᵉ erreur**.
+- [ ] (option) Partie où **le solveur ouvre** : à quel coup mon IA craque.

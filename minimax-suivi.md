@@ -411,7 +411,7 @@ Pendant C++ des « fenêtres pré-calculées » du JS, mais poussé d'un cran. E
 - **Dessin** : `paintEvent` trace deux diagonales par case via un `QPen` (gris foncé, `setCapStyle(RoundCap)`). Réglages itérés à la demande : trait `cell/12 → cell/7` (**plus gras**), demi-diagonale `0.28 → 0.16` de la boule (**plus petites**).
 - **Ordre d'affichage** : à la détection, `hasWin = true` + `repaint()` **avant** le `QMessageBox` (modal) → les croix sont visibles derrière la boîte. `reset()` remet `hasWin = false`.
 
-**Table de transposition — EN COURS** (classe écrite & relue : constructeur + `getHash` + `getScore` + `setScore` ✅ ; **pas encore câblée au `minimax`**). La grosse optim qui reste, et le morceau d'algo le plus instructif avant Awalé/échecs.
+**Table de transposition — FAIT ✅** (classe + câblage `minimax` + validation « avec vs sans TT »). La grosse optim qui restait, et le morceau d'algo le plus instructif avant Awalé/échecs.
 - **But direct** : ne **pas recalculer** un sous-arbre déjà évalué. Une *transposition* = une même position atteinte par des ordres de coups différents (ex. colonnes `3` puis `4` ⇒ même plateau que `4` puis `3` ⇒ sous-arbre identique). Sans table, le minimax le calcule deux fois — et bien pire en profondeur, le nombre de chemins menant à une position explose.
 - **Conséquence** (≠ but) : à temps égal on descend **plus profond** (IA plus forte), ou à profondeur égale on répond **plus vite**. Même gain vu des deux côtés. C'est l'autre moitié de `force = profondeur × éval`, côté profondeur — comme le move ordering et le threading `alpha`, ça **ne change pas le résultat à profondeur égale**.
 - **Mécanique** : table `position → (score, profondeur de calcul)`. Avant d'explorer un nœud, on regarde la table ; si présent **et calculé à profondeur ≥** celle voulue → on réutilise, on coupe le sous-arbre.
@@ -449,8 +449,13 @@ force_stockée ≥ force_voulue  ⟺  (MAX_DEPTH − entry->depth) ≥ (MAX_DEPT
 - **`decal` avançant d'1 bit/colonne** alors qu'une case = **2 bits** → masques de colonnes qui se chevauchent, lecture faussée (PLAYER1 lu vide, PLAYER2 lu PLAYER1). → corrigé en lisant via **`getCell(col,row)`** (plus simple et increvable que le masque maison).
 - **Ternaire no-op** `position |= (… ? maskIdx : position)` : la branche else `|= position` ne fait rien (sans dégât, mais confus) → simple `if (currentPlayer == player) position |= maskIdx;`.
 
-### Reste à faire (au retour)
-1. **Câbler la TT dans `minimax`** (le vrai morceau restant) : probe en tête (`getScore`, si `!= P4INFINITY` couper), `setScore(hash, depth, best)` avant le `return best`. `getHash` avec le trait du nœud (`this->player`). **Ordre** : garder `win()`/`isFull()` (incrémental, ≤13 fenêtres, très peu cher) **avant** le probe — inutile de hasher (balaye 42 cases) une position déjà terminale.
-2. **Vérifier le gain** via le compteur `nodes` (les stats UI) : à profondeur égale, beaucoup moins de grilles → c'est ce qu'on mesure.
-3. **Point différé — bornes α-β** : le `best` stocké peut être une **borne** (coupure `alpha >= beta`), pas la valeur exacte. Réutilisé tel quel → approximation ; 1er suspect d'un coup bizarre. Vraie correction = drapeau `EXACT / borne_inf / borne_sup` par entrée (plus tard).
-4. **Plus tard** : Zobrist (hash incrémental O(1)) en remplacement de `getHash`.
+### Câblage dans `minimax` + validation (fait ✅)
+- **Câblé** : probe en tête (`getScore`, si `!= P4INFINITY` → couper), `setScore(hash, depth, best)` avant le `return best`, `getHash` avec le trait du nœud (`this->player`). **Ordre respecté** : `win()`/`isFull()` (incrémental, ≤13 fenêtres) **avant** le probe — inutile de hasher (42 cases) une position terminale.
+- **Validé par le test « avec vs sans TT »** : à `MAX_DEPTH` égal, sur la position litigieuse, **même coup joué**, `nodes` en forte baisse. Signature d'une optim correcte (comme move ordering / threading : *ne change pas le résultat, seulement le nombre de nœuds*). Outil = flag global `g_useTT` court-circuitant probe+store pour comparer les deux runs. *Nuance : 1 position = forte présomption, pas preuve formelle (cf. bornes α-β ci-dessous).*
+
+### Reste (optionnel / plus tard)
+- **Point différé — bornes α-β** : le `best` stocké peut être une **borne** (coupure `alpha >= beta`), pas la valeur exacte → réutilisation approximative. N'a **pas** changé le coup sur la position testée, mais reste le 1er suspect d'un coup bizarre ailleurs. Vraie correction = drapeau `EXACT / borne_inf / borne_sup` par entrée.
+- **Zobrist** : hash incrémental O(1) en remplacement de `getHash` (passe de perf ; réintroduit le risque de collision lossy).
+
+### Lien avec la confrontation au solveur (constat)
+Une fois la TT validée, l'IA (ouverture centre forcée) joue un **coup sous-optimal dès son 3ème coup** (classé perdant par gamesolver.org). **Ce n'est pas un bug** (même coup avec/sans TT) : c'est l'**honnête limite profondeur+heuristique** — à profondeur 10, le gain d'une position d'ouverture (résolu à ~15-20 plis) n'est pas prouvable → l'éval tranche, et se trompe. Illustration directe de `force = profondeur × éval`. → matière pour la **partie 5** du [`plan-video.md`](plan-video.md) (analyse coup-par-coup à monter : script Node + API solveur).
