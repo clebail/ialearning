@@ -12,11 +12,13 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     puissance4.cpp \
+    transpositiontable.cpp \
     wpuissance4.cpp
 
 HEADERS += \
     mainwindow.h \
     puissance4.h \
+    transpositiontable.h \
     wpuissance4.h
 
 FORMS += \

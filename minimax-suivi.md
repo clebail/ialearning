@@ -411,7 +411,7 @@ Pendant C++ des « fenêtres pré-calculées » du JS, mais poussé d'un cran. E
 - **Dessin** : `paintEvent` trace deux diagonales par case via un `QPen` (gris foncé, `setCapStyle(RoundCap)`). Réglages itérés à la demande : trait `cell/12 → cell/7` (**plus gras**), demi-diagonale `0.28 → 0.16` de la boule (**plus petites**).
 - **Ordre d'affichage** : à la détection, `hasWin = true` + `repaint()` **avant** le `QMessageBox` (modal) → les croix sont visibles derrière la boîte. `reset()` remet `hasWin = false`.
 
-**Piste suivante : table de transposition (pas encore commencée).** La grosse optim qui reste, et le morceau d'algo le plus instructif avant Awalé/échecs.
+**Table de transposition — EN COURS** (classe écrite & relue : constructeur + `getHash` + `getScore` + `setScore` ✅ ; **pas encore câblée au `minimax`**). La grosse optim qui reste, et le morceau d'algo le plus instructif avant Awalé/échecs.
 - **But direct** : ne **pas recalculer** un sous-arbre déjà évalué. Une *transposition* = une même position atteinte par des ordres de coups différents (ex. colonnes `3` puis `4` ⇒ même plateau que `4` puis `3` ⇒ sous-arbre identique). Sans table, le minimax le calcule deux fois — et bien pire en profondeur, le nombre de chemins menant à une position explose.
 - **Conséquence** (≠ but) : à temps égal on descend **plus profond** (IA plus forte), ou à profondeur égale on répond **plus vite**. Même gain vu des deux côtés. C'est l'autre moitié de `force = profondeur × éval`, côté profondeur — comme le move ordering et le threading `alpha`, ça **ne change pas le résultat à profondeur égale**.
 - **Mécanique** : table `position → (score, profondeur de calcul)`. Avant d'explorer un nœud, on regarde la table ; si présent **et calculé à profondeur ≥** celle voulue → on réutilise, on coupe le sous-arbre.
@@ -419,3 +419,38 @@ Pendant C++ des « fenêtres pré-calculées » du JS, mais poussé d'un cran. E
   1. **La profondeur stockée est obligatoire.** Un score calculé à profondeur 3 ne vaut pas pour une recherche qui veut profondeur 6 → ne réutiliser que si `profondeurStockée ≥ profondeurVoulue`. L'oublier rend l'IA *plus faible* en croyant l'accélérer (erreur classique du débutant).
   2. **Clé de position** : il faut un hash compact et rapide. Standard = *Zobrist hashing*. Le bitboard (`6 × unsigned short`) rend la clé facile. Démarrer par une version **naïve** (clé = copie/recalcul direct du plateau) pour valider la logique, puis passer à Zobrist.
 - **Gain conditionnel** : rentable seulement si les transpositions sont fréquentes (vrai au Puissance 4) et si consulter la table coûte moins que recalculer. Décision : à attaquer après avoir profité du niveau actuel ; commencer simple (clé naïve, profondeur stockée) avant d'optimiser le hash.
+
+### Décisions de conception (tranchées avec Claude)
+Fichiers `cpp/puissance4/transpositiontable.{h,cpp}`. Deux choix structurants débattus avant d'écrire une ligne :
+
+**1. Structure = table de hachage à adressage direct** (et **pas** tableaux triés + dichotomie). Le critère qui tranche = le **motif d'accès** : une TT est *write-heavy*, le minimax **écrit autant qu'il lit**, en continu pendant la recherche (un `setScore` à chaque nœud fini, un `getScore` à chaque nœud entré). Un tableau trié lit vite (dichotomie O(log n)) mais **insère en O(n)** (décalage pour rester trié) → rédhibitoire sur le point chaud. La table à adressage direct fait **lecture ET écriture en O(1)** : `index = hash % TABLE_SIZE`, collisions gérées par **remplacement** (une TT est un *cache*, perdre une vieille entrée est gratuit). Ça a **supprimé la moitié des membres** du proto initial (`nbIndexes`, `nbScores`, `indexes`/`scores` 2D, `sortDepths`, `sortIndexes`, `getIndex`, `getScoreFromIndex`). *Leçon (rappel) : choisir la structure pour le point chaud — ici l'insertion continue, pas la lecture.*
+
+**2. Clé = exacte et compacte (49 bits dans un `uint64_t`)**, pas un hash lossy (Zobrist gardé pour plus tard), pas la clé brute 96 bits. **Deux rôles à distinguer** que le 1er proto confondait : l'**index** (`hash % N`, petit, collisions normales gérées par remplacement) ET la **clé de vérification** (stockée dans l'entrée, comparée à la lecture pour rejeter un squatteur). Clé exacte ⇒ **jamais de faux positif** (cohérent avec « imbattable = exact, pas approximation »). Encodage Puissance 4 classique **`position + mask`** : `mask` = bitboard d'occupation (1 bit/case), `position` = pions du joueur au trait. Tient en 49 bits via une disposition **par colonne, 7 bits/colonne (6 cases + 1 sentinelle)** — la retenue de l'addition s'arrête dans le bit sentinelle sans déborder sur la colonne voisine. Unique car, par colonne, les pions remplissent depuis le bas → `mask` = suite contiguë de 1 depuis la base → chaque `(hauteur, répartition)` donne une somme distincte. **Bonus gratuit** : le trait est encodé tout seul (`position` = « pions de celui qui joue ») → pas de bit « à qui de jouer » en plus. *Zobrist viendra remplacer `getHash` (même point d'appel) en passe de perf — mais il réintroduira le risque de collision (lossy).*
+
+### Implémentation (faite, relue)
+- **Singleton sur le tas** (`getInstance()` + `new`, constructeur privé). **Critique** : l'entrée fait 16 Mo (`SEntry table[1000000]`, 16 o/entrée). Surtout **pas un membre de `Puissance4`** (le minimax fait `Puissance4 other(*this)` à chaque nœud → 16 Mo clonés par nœud = mort) ni une **locale de pile** (stack overflow). Une seule instance, vue par pointeur. Persiste entre coups **et entre parties** — valide car la valeur d'une position à profondeur donnée est déterministe.
+- **Entrée** `SEntry { uint64_t hash; int depth; int score; }`. **`memset(table, 0xFF, …)`** au constructeur → case vierge = `hash = 0xFFFF…FFFF` (jamais une vraie clé ≤ 49 bits) et `depth = -1`. *Pourquoi pas `0`* : la clé du **plateau vide est `0`** (`position+mask = 0`) → on ne peut pas s'en servir comme marqueur « libre ». `0xFF` donne un marqueur hors d'atteinte sans cas particulier.
+- **`getScore`** : `entry = table[hash % SIZE]` ; hit ssi `entry->hash == hash` **ET** `entry->depth <= depth`, sinon renvoie **`P4INFINITY`** (sentinelle de *miss* — hors de la plage des vrais scores).
+- **`getHash`** : double boucle colonne×ligne, `getCell(col,row)` lit la case (0/1/2), `maskIdx` placé en `col*7 + row` (décalage sentinelle `<<= 1` entre colonnes), renvoie `mask + position`. `friend class TranspositionTable;` dans `puissance4.h` pour l'accès (mais `getCell` public suffit).
+
+### Le piège central : sens de la condition de profondeur
+`depth` dans le `minimax` part de **0 à la racine** et **monte** (cutoff `depth >= MAX_DEPTH`). Donc un nœud à profondeur `d` est cherché avec une **force = `MAX_DEPTH − d`** (plis explorés dessous). On ne réutilise une entrée que si sa force est **≥** au besoin :
+```
+force_stockée ≥ force_voulue  ⟺  (MAX_DEPTH − entry->depth) ≥ (MAX_DEPTH − depth)  ⟺  entry->depth ≤ depth
+```
+→ condition **`entry->depth <= depth`** (et **pas** `>=`). C'est *le* piège noté de longue date (« profondeur stockée obligatoire ») : 1ʳᵉ version écrite avec `>=` → réutilisait un résultat peu profond là où il fallait chercher loin → **IA plus faible en silence**. Le `>=` perd même doublement : il rate aussi les réutilisations valides (résultat profond pour besoin peu profond).
+
+### Bugs rencontrés (et leçons) — TT
+- **Sentinelle de *miss* impossible** : `getScore` renvoyait `-1` pour « absent » → mais `-1` est un **vrai score**. Tout `int` est un score valide → il faut une valeur **hors plage** → `P4INFINITY`.
+- **Condition de profondeur inversée** (`>=` au lieu de `<=`) — cf. ci-dessus, le bug de fond.
+- **Marqueur de case vide = `0`** se confond avec la clé du plateau vide → `memset(0xFF)`.
+- **`maskIdx` en `int`** : doublé 42 fois → dépasse le bit 31 → débordement signé (UB) + extension de signe en l'OR-ant dans un `uint64_t`. → `uint64_t`.
+- **Disposition par ligne** (1er jet du `mask`) incompatible avec `position + mask` : la retenue traverserait les colonnes horizontalement. → **par colonne avec sentinelle**.
+- **`decal` avançant d'1 bit/colonne** alors qu'une case = **2 bits** → masques de colonnes qui se chevauchent, lecture faussée (PLAYER1 lu vide, PLAYER2 lu PLAYER1). → corrigé en lisant via **`getCell(col,row)`** (plus simple et increvable que le masque maison).
+- **Ternaire no-op** `position |= (… ? maskIdx : position)` : la branche else `|= position` ne fait rien (sans dégât, mais confus) → simple `if (currentPlayer == player) position |= maskIdx;`.
+
+### Reste à faire (au retour)
+1. **Câbler la TT dans `minimax`** (le vrai morceau restant) : probe en tête (`getScore`, si `!= P4INFINITY` couper), `setScore(hash, depth, best)` avant le `return best`. `getHash` avec le trait du nœud (`this->player`). **Ordre** : garder `win()`/`isFull()` (incrémental, ≤13 fenêtres, très peu cher) **avant** le probe — inutile de hasher (balaye 42 cases) une position déjà terminale.
+2. **Vérifier le gain** via le compteur `nodes` (les stats UI) : à profondeur égale, beaucoup moins de grilles → c'est ce qu'on mesure.
+3. **Point différé — bornes α-β** : le `best` stocké peut être une **borne** (coupure `alpha >= beta`), pas la valeur exacte. Réutilisé tel quel → approximation ; 1er suspect d'un coup bizarre. Vraie correction = drapeau `EXACT / borne_inf / borne_sup` par entrée (plus tard).
+4. **Plus tard** : Zobrist (hash incrémental O(1)) en remplacement de `getHash`.

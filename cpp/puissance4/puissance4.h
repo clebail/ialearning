@@ -14,6 +14,7 @@
 #define BONUS_CENTRE        30
 
 class Puissance4 {
+    friend class TranspositionTable;
 public:
     Puissance4();
     Puissance4(const Puissance4 &other) = default;
