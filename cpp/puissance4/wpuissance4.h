@@ -49,6 +49,12 @@ private:
     // Joue un coup de l'IA (chrono + bestMove + tests fin de partie). Sans effet
     // si la partie est finie : sert au tour normal comme au tout premier coup.
     void aiTurn();
+
+    // Journal des coups de la partie, colonnes 1-indexées et collées (ex. "443"),
+    // prêt à passer à solver-analyse.sh. Émis sur qDebug à chaque coup, humain comme
+    // IA ; vidé à chaque nouvelle partie. N'a aucun effet sur le jeu (debug seul).
+    QString moveSeq;
+    void logMove(int col);
 };
 
 #endif // WPUISSANCE4_H

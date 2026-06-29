@@ -2,6 +2,7 @@
 #include <QMouseEvent>
 #include <QMessageBox>
 #include <QElapsedTimer>
+#include <QDebug>
 #include "wpuissance4.h"
 
 namespace {
@@ -45,8 +46,17 @@ void WPuissance4::reset() {
     hasWin = false;
     pulseTimer.stop();
     lastCol = lastRow = -1;
+    moveSeq.clear();
     emit statsReset();
     repaint();
+}
+
+// Ajoute le coup au journal (colonne 0-indexée en interne → +1 pour le solveur) et
+// affiche la séquence complète : la dernière ligne de qDebug se colle telle quelle
+// dans solver-analyse.sh.
+void WPuissance4::logMove(int col) {
+    moveSeq += QString::number(col + 1);
+    qDebug().noquote() << "Séquence des coups :" << moveSeq;
 }
 
 // Cases carrées → ronds (jamais d'ovales) : on prend le plus grand côté qui tient
@@ -80,6 +90,7 @@ void WPuissance4::mouseReleaseEvent(QMouseEvent *event) {
     // d'événements (le timer ne tournerait pas) → la boule resterait figée petite.
     // Seul le coup de l'IA est animé.
     unsigned char who = board->play(col);
+    logMove(col);
     repaint();
 
     if (board->winningLine(winCols, winRows)) {
@@ -110,6 +121,7 @@ void WPuissance4::aiStart() {
     // On le joue directement, sans lancer le minimax (réflexion inutile et coûteuse).
     int row;
     board->play(COLONNE_CENTRE, &row);
+    logMove(COLONNE_CENTRE);
     startPulse(COLONNE_CENTRE, row);
     repaint();
 }
@@ -135,6 +147,7 @@ void WPuissance4::aiTurn() {
 
     int row;
     unsigned char who = board->play(aiCol, &row);
+    logMove(aiCol);
     startPulse(aiCol, row);
     repaint();
 
