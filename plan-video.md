@@ -128,9 +128,25 @@ mon IA voit ~10 plis + une heuristique bricolée ; lui voit **jusqu'au bout**.
   1ʳᵉ erreur**.
 
 - **L'outil** 👤 : l'API (non documentée mais publique) `GET …/solve?pos=<colonnes 1-indexées>`
-  renvoie un **score par colonne** (signe = issue, magnitude = vitesse). On l'appelle depuis un
-  **petit script Node** (hors navigateur → contourne le **CORS**), 1 requête/coup, poliment.
-  Détails techniques + format de réponse : voir [`minimax-suivi.md`](minimax-suivi.md).
+  renvoie un **score par colonne** (signe = issue, magnitude = vitesse). Pas besoin de Node : le
+  **CORS est une contrainte navigateur uniquement**, donc un simple `curl` (hors navigateur) y
+  accède sans rien contourner. Outil retenu : **`curl` + `jq`**, 1 requête/coup, poliment.
+
+  **Mémo workflow (l'app reste 100 % autonome, zéro réseau dedans) :**
+  1. Jouer la partie dans l'app C++. À chaque coup, `WPuissance4::logMove()` émet sur `qDebug`
+     `Séquence des coups : 443…` — colonnes **1-indexées**, collées. La dernière ligne = la partie
+     complète. (Coupe le journal à chaque *Rejouer*.)
+  2. Coller cette séquence dans le script d'analyse à la racine du repo :
+     `./solver-analyse.sh <séquence> <joueur_ia>` — `joueur_ia` = `1` si l'IA ouvre, `2` si elle
+     répond (lecture directe du radio « Qui commence »). Option `--base0` si on part de colonnes
+     0-indexées.
+  3. Le bilan sort les deux chiffres de la voix off : **nb de coups optimaux avant la 1ʳᵉ erreur**
+     et le **pli exact du basculement** gagnant→perdant.
+
+  **Pièges de l'API gérés par le script** : `100` = colonne pleine/illégale (exclue du max) ;
+  tableau de scores uniforme = partie déjà finie (arrêt) ; entrée invalide silencieusement
+  acceptée par l'API (d'où validation locale des colonnes 1-7). Le score est **toujours du point
+  de vue du joueur au trait** ; meilleure colonne = le max. Détails : voir [`minimax-suivi.md`](minimax-suivi.md).
 
 - **Les deux scénarios à filmer** :
   - *Mon IA ouvre (centre)* → sait-elle **convertir** une position gagnante face à une défense
