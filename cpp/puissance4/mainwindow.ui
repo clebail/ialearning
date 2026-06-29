@@ -64,6 +64,52 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="depthLabel">
+          <property name="text">
+           <string>Profondeur :</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QSpinBox" name="depthSpin">
+          <property name="toolTip">
+           <string>Profondeur max d'exploration du minimax (relance la partie)</string>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>15</number>
+          </property>
+          <property name="value">
+           <number>14</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="evalZeroCheck">
+          <property name="toolTip">
+           <string>Débranche l'heuristique : evaluate() renvoie 0 (relance la partie)</string>
+          </property>
+          <property name="text">
+           <string>evaluate = 0</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="ttCheck">
+          <property name="toolTip">
+           <string>Active la table de transposition (relance la partie)</string>
+          </property>
+          <property name="text">
+           <string>Table de transposition</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="bottomSpacer">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
@@ -105,13 +151,6 @@
        <string>Stats IA minimax α-β</string>
       </property>
       <layout class="QVBoxLayout" name="statsLayout">
-       <item>
-        <widget class="QLabel" name="statDepth">
-         <property name="text">
-          <string>Profondeur max (MAX_DEPTH) :&lt;br/&gt;&lt;b&gt;—&lt;/b&gt;</string>
-         </property>
-        </widget>
-       </item>
        <item>
         <widget class="QLabel" name="statNodes">
          <property name="text">

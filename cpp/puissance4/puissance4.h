@@ -9,9 +9,15 @@
 #define PLAYER2             ((unsigned char)2)
 #define PLAYERS             ((unsigned char)(PLAYER1+PLAYER2))
 #define P4INFINITY          ((int)1000000)
-#define MAX_DEPTH           14
+#define DEFAULT_MAX_DEPTH   14
 #define COLONNE_CENTRE      3
 #define BONUS_CENTRE        30
+// Score d'un mat, choisi TRÈS au-dessus du plafond de l'heuristique (≤ 69×1000+180 ≈
+// 69180) pour que mat et évaluation ne se chevauchent jamais : ordre ∞ > mat > éval.
+#define WIN_SCORE           ((int)100000)
+// |score| ≥ ce seuil ⇒ c'est un mat (et non une éval). La marge BOARD_SIZE couvre l'écart
+// max entre distance-à-la-racine et distance-au-nœud lors du repli mat de la TT.
+#define MATE_THRESHOLD      (WIN_SCORE - BOARD_SIZE)
 
 class Puissance4 {
     friend class TranspositionTable;
@@ -38,6 +44,20 @@ public:
     // récursif travaille sur des copies du plateau : seul un compteur partagé peut
     // agréger tout l'arbre. Remis à 0 en début de bestMove().
     static long nodes;
+
+    // Profondeur maximale d'exploration, pilotée par le spinbox de l'UI. Statique pour
+    // la même raison que nodes : le minimax tourne sur des copies du plateau, un réglage
+    // partagé évite de le trimballer dans chaque appel récursif.
+    static int maxDepth;
+
+    // Débranche l'heuristique : evaluate() renvoie 0. Piloté par une case à cocher de
+    // l'UI — sert à montrer que la profondeur seule suffit déjà à bien jouer (cf. verdict).
+    static bool evalZero;
+
+    // Active/désactive la table de transposition (case à cocher de l'UI). La débrancher
+    // en direct montre ce qu'elle rapporte vraiment : nœuds explorés et temps à profondeur
+    // égale, avec vs sans cache.
+    static bool ttEnabled;
 private:
     static const int COLUMNS_ORDER[NB_COL];
 

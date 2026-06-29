@@ -12,6 +12,12 @@ TranspositionTable* TranspositionTable::getInstance() {
 }
 
 TranspositionTable::TranspositionTable() {
+    clear();
+}
+
+// 0xFF sur tout le tableau = des hash "impossibles" partout, donc aucun hit tant qu'on
+// n'a rien réécrit. Même opération qu'à la construction, réutilisée à chaque relance.
+void TranspositionTable::clear() {
     memset(table, 0xFF, sizeof(SEntry) * TABLE_SIZE);
 }
 
@@ -38,20 +44,34 @@ uint64_t TranspositionTable::getHash(const Puissance4& p4, unsigned char player)
     return mask + position;
 }
 
-int TranspositionTable::getScore(uint64_t hash, int depth) const {
+bool TranspositionTable::probe(uint64_t hash, int depth, int &score, Bound &bound) const {
     const SEntry* entry = &table[hash % TABLE_SIZE];
-    if (entry->hash == hash) {
-        if (entry->depth <= depth) {
-            return entry->score;
-        }
+    // Même position (et pas une simple collision d'index) ET calculée avec au moins
+    // autant de profondeur restante : entry->depth ≤ depth ⇔ entrée plus proche de la
+    // racine ⇔ sous-arbre au moins aussi profond que celui qu'on s'apprête à explorer.
+    if (entry->hash == hash && entry->depth <= depth) {
+        score = entry->score;
+        // Inverse de store() : le mat est mémorisé en distance-AU-NŒUD ; on le ramène en
+        // distance-à-la-racine COURANTE (re-soustraire/rajouter depth). Sans ça, la même
+        // position lue à une autre profondeur annoncerait un mat à la mauvaise distance.
+        if (score >= MATE_THRESHOLD) score -= depth;
+        else if (score <= -MATE_THRESHOLD) score += depth;
+        bound = entry->bound;
+        return true;
     }
 
-    return P4INFINITY;
+    return false;
 }
 
-void TranspositionTable::setScore(uint64_t hash, int depth, int score) {
+void TranspositionTable::store(uint64_t hash, int depth, int score, Bound bound) {
     auto idx = hash % TABLE_SIZE;
+    // Un score de mat encode une distance-à-la-RACINE (WIN_SCORE - depth). La TT survit
+    // d'un coup à l'autre : la racine bouge, donc on neutralise cette dépendance en le
+    // convertissant en distance-AU-NŒUD avant de l'écrire (probe() refait l'inverse).
+    if (score >= MATE_THRESHOLD) score += depth;
+    else if (score <= -MATE_THRESHOLD) score -= depth;
     table[idx].hash = hash;
     table[idx].depth = depth;
     table[idx].score = score;
+    table[idx].bound = bound;
 }

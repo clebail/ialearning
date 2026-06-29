@@ -7,6 +7,9 @@
 const int Puissance4::COLUMNS_ORDER[NB_COL] = {3, 2, 4, 1, 5, 0, 6};
 
 long Puissance4::nodes = 0;
+int Puissance4::maxDepth = DEFAULT_MAX_DEPTH;
+bool Puissance4::evalZero = false;
+bool Puissance4::ttEnabled = true;
 
 namespace {
 
@@ -222,25 +225,45 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
     unsigned char winner = win(lastCol, lastRow);
 
     if (winner == PLAYER2) {
-        return 10000 - depth;
+        return WIN_SCORE - depth;
     }
 
     if (winner == PLAYER1) {
-        return -10000 + depth;
+        return -WIN_SCORE + depth;
     }
 
     if (isFull()) {
         return 0;
     }
 
-    uint64_t hash = TranspositionTable::getInstance()->getHash(*this, player);
-    int score = TranspositionTable::getInstance()->getScore(hash, depth);
+    // Fenêtre αβ reçue, figée AVANT toute modification : c'est elle qui sert à étiqueter
+    // le score qu'on mémorisera (exact, ou simple borne si l'on coupe).
+    const int alphaOrig = alpha;
+    const int betaOrig = beta;
 
-    if (score != P4INFINITY) {
-        // return score;
+    TranspositionTable *tt = TranspositionTable::getInstance();
+    const uint64_t hash = ttEnabled ? tt->getHash(*this, player) : 0;
+
+    // Réutilisation d'un sous-arbre déjà résolu, en RESPECTANT la nature du score caché.
+    // BUG CORRIGÉ : un score issu d'une coupure αβ n'est qu'une borne. On ne le ressort
+    // donc QUE s'il tranche vraiment la fenêtre courante :
+    //  - EXACT : la vraie valeur, utilisable telle quelle ;
+    //  - LOWER (borne basse) : utile seulement s'il provoque lui-même une coupure (≥ beta) ;
+    //  - UPPER (borne haute) : utile seulement s'il tombe sous alpha (échec bas).
+    // Sinon la borne n'apprend rien d'exploitable ici → on explore normalement.
+    // Toute la TT est court-circuitée si elle est désactivée depuis l'UI.
+    if (ttEnabled) {
+        int ttScore;
+        TranspositionTable::Bound ttBound;
+        if (tt->probe(hash, depth, ttScore, ttBound)) {
+            if (ttBound == TranspositionTable::EXACT
+             || (ttBound == TranspositionTable::LOWER && ttScore >= beta)
+             || (ttBound == TranspositionTable::UPPER && ttScore <= alpha))
+                return ttScore;
+        }
     }
 
-    if(depth >= MAX_DEPTH) return evaluate();
+    if(depth >= maxDepth) return evaluate();
 
     bool maximize = player == PLAYER2;
     int best = maximize ? -P4INFINITY : P4INFINITY;
@@ -254,7 +277,7 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
         int row;
         other.play(cols[c], &row);
 
-        score = other.minimax(depth + 1, alpha, beta, cols[c], row);
+        int score = other.minimax(depth + 1, alpha, beta, cols[c], row);
         if (maximize) {
             best = qMax(best, score);
             alpha = qMax(alpha, best);
@@ -268,12 +291,30 @@ int Puissance4::minimax(int depth, int alpha, int beta, int lastCol, int lastRow
         }
     }
 
-    TranspositionTable::getInstance()->setScore(hash, depth, best);
+    // Étiquetage du score selon la fenêtre D'ORIGINE (la boucle n'a pas resserré depuis
+    // la TT, donc elle a bien tourné sur [alphaOrig, betaOrig]) :
+    //  - best ≤ alphaOrig : jamais dépassé alpha → borne SUPÉRIEURE (échec bas) ;
+    //  - best ≥ betaOrig  : coupure β → borne INFÉRIEURE (arrêt « trop tôt ») ;
+    //  - entre les deux   : fenêtre entièrement tranchée → valeur EXACTE.
+    if (ttEnabled) {
+        TranspositionTable::Bound bound;
+        if (best <= alphaOrig)
+            bound = TranspositionTable::UPPER;
+        else if (best >= betaOrig)
+            bound = TranspositionTable::LOWER;
+        else
+            bound = TranspositionTable::EXACT;
+        tt->store(hash, depth, best, bound);
+    }
 
     return best;
 }
 
 int Puissance4::evaluate() const {
+    // Heuristique débranchée : on renvoie un score neutre. Le minimax ne s'appuie alors
+    // plus que sur les feuilles terminales (victoire/nul) vues dans son horizon.
+    if (evalZero) return 0;
+
     int score = 0;
 
     for (const Fenetre &f : FENETRES) {

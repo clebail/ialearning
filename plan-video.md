@@ -146,11 +146,37 @@ mon IA voit ~10 plis + une heuristique bricolée ; lui voit **jusqu'au bout**.
 
 ## À capturer avant de tourner (sinon le verdict reste qualitatif)
 
+### Les réglages live de l'app C++ (la « table de mixage » des mesures)
+
+Trois contrôles ajoutés dans la barre du bas pilotent le moteur sans recompiler. **Chaque
+changement relance la partie de zéro ET vide la table de transposition** → toute mesure part
+d'un état neuf, aucun cache résiduel ne fausse le 1er coup. Idem pour « qui commence ».
+
+- **Spinbox Profondeur (1–15)** — le levier *profondeur* de l'équation `force = profondeur × éval`.
+- **Checkbox `evaluate = 0`** — débranche l'heuristique (le minimax ne voit plus que les
+  feuilles terminales de son horizon). Le mat valant 100 000 ≫ éval max (~69 180), l'IA voit
+  toujours les mats : c'est ce qui rend la démo « je débranche l'éval et ça gagne quand même »
+  honnête.
+- **Checkbox Table de transposition** — active/désactive la TT pour isoler ce que l'*idée algo*
+  rapporte, à profondeur égale.
+
+Mapping contrôle → mesure :
+
+| Mesure à capturer | Réglage |
+|---|---|
+| JS vs C++ à profondeur égale (nœuds/ms) | spinbox = **7** sur les deux apps |
+| Temps du 1er coup C++ à profondeur 10 | spinbox = **10** |
+| Profondeur seule vs heuristique | spinbox = **10** + cocher **`evaluate = 0`** |
+| Ce que rapporte la TT | profondeur fixe, comparer **TT cochée / décochée** |
+
+### La checklist
+
 Les deux UIs affichent déjà nœuds + temps. Sur **une même position** :
 
 - [ ] JS et C++ à **profondeur égale** (ex. 7) → écart de nœuds / ms.
 - [ ] Temps du **1er coup C++ à profondeur 10**.
 - [ ] (option) C++ profondeur 10 avec `evaluate ≡ 0` vs avec heuristique → différence de jeu.
+- [ ] **TT cochée vs décochée** à profondeur égale → effondrement des nœuds (le levier *idée algo*).
 
 Pour la partie 5 (confrontation au solveur) :
 

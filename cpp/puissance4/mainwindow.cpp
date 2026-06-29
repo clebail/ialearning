@@ -1,6 +1,10 @@
 #include <QPushButton>
+#include <QRadioButton>
+#include <QSpinBox>
+#include <QCheckBox>
 #include <QLocale>
 #include "mainwindow.h"
+#include "transpositiontable.h"
 
 namespace {
 
@@ -21,16 +25,48 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     wPuissance4->setBoard(&p4);
 
-    // Nouvelle partie : on vide le plateau, puis si le radio « L'IA » est coché,
-    // on lui laisse poser le premier pion.
-    connect(rejouerButton, &QPushButton::clicked, this, [this] {
+    // Les réglages de l'UI pilotent directement le moteur (membres statiques partagés) ;
+    // on synchronise une fois au démarrage avec l'état initial des widgets.
+    Puissance4::maxDepth = depthSpin->value();
+    Puissance4::evalZero = evalZeroCheck->isChecked();
+    Puissance4::ttEnabled = ttCheck->isChecked();
+
+    // Relance une partie neuve : on vide la table de transposition (ses scores en cache
+    // dépendent des réglages courants → invalides dès qu'un paramètre change), on remet
+    // le plateau à zéro, puis si « L'IA » commence on lui laisse poser le premier pion.
+    auto restartGame = [this] {
+        TranspositionTable::getInstance()->clear();
         wPuissance4->reset();
         if (radioIA->isChecked())
             wPuissance4->aiStart();
+    };
+
+    connect(rejouerButton, &QPushButton::clicked, this, restartGame);
+
+    // Changer un réglage de recherche relance la partie de zéro : on ne mélange jamais,
+    // dans une même partie, des coups calculés avec des paramètres différents.
+    connect(depthSpin, qOverload<int>(&QSpinBox::valueChanged), this,
+            [this, restartGame](int value) {
+        Puissance4::maxDepth = value;
+        restartGame();
+    });
+    connect(evalZeroCheck, &QCheckBox::toggled, this, [this, restartGame](bool checked) {
+        Puissance4::evalZero = checked;
+        restartGame();
+    });
+    connect(ttCheck, &QCheckBox::toggled, this, [this, restartGame](bool checked) {
+        Puissance4::ttEnabled = checked;
+        restartGame();
     });
 
-    // Profondeur : fixe, posée une fois pour toutes.
-    setStatValue(statDepth, QString::number(MAX_DEPTH));
+    // « Qui commence » : toggled part en double (l'un se décoche, l'autre se coche) ;
+    // on ne déclenche que sur le bouton qui PASSE à coché → une seule relance.
+    connect(radioHuman, &QRadioButton::toggled, this, [restartGame](bool checked) {
+        if (checked) restartGame();
+    });
+    connect(radioIA, &QRadioButton::toggled, this, [restartGame](bool checked) {
+        if (checked) restartGame();
+    });
 
     // Stats par coup + cumuls, alimentés à chaque coup de l'IA.
     connect(wPuissance4, &WPuissance4::aiMoved, this, [this](long nodes, double timeMs) {
